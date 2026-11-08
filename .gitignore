@@ -1,0 +1,9 @@
+.tools/
+dist/
+__pycache__/
+*.pyc
+
+# Private design sources, mockups, previews, and development evidence.
+design/
+docs/
+.exampleAddon/

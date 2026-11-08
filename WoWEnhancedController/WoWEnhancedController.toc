@@ -1,0 +1,16 @@
+## Interface: 16001
+## Title: WoW Enhanced Controller
+## Notes: Native controller keyboard, contextual phrases, and numeric input for WoW Forever.
+## Author: JBurlison
+## Version: 0.1.0
+## SavedVariables: WoWEnhancedControllerDB
+## OptionalDeps: Blizzard_EditMode, Blizzard_AuctionHouseUI, Blizzard_Professions, Blizzard_MailFrame
+Namespace.lua
+Text.lua
+Contexts.lua
+Phrases.lua
+Theme.lua
+Placement.lua
+Keyboard.lua
+Input.lua
+Bootstrap.lua
