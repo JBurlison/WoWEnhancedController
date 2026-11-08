@@ -4,6 +4,24 @@ W.Contexts = C
 
 local labels = { SAY = "Say", YELL = "Yell", PARTY = "Party", RAID = "Raid", RAID_WARNING = "Raid warning",
     INSTANCE_CHAT = "Instance", GUILD = "Guild", OFFICER = "Officer", WHISPER = "Whisper", BN_WHISPER = "Battle.net whisper", EMOTE = "Emote" }
+-- Leave Auction House count controls to the native UI. QuantityInput wrappers
+-- commonly have only a parentKey, so inspecting global EditBox names is not enough.
+function C.NativeAuctionQuantity(box)
+    local node, auction, quantity = box, false, false
+    for _ = 1, 20 do
+        if not node then break end
+        local name, parent = W.Call(node, "GetName"), W.Call(node, "GetParent")
+        if type(name) == "string" then
+            name = name:lower()
+            if name:find("auctionhouse", 1, true) or name:find("auctionframe", 1, true) then auction = true end
+            if name:find("quantity", 1, true) or name:find("count", 1, true) then quantity = true end
+        end
+        if parent and not W.Secret(parent.QuantityInput) and parent.QuantityInput == node then quantity = true end
+        if auction and quantity then return true end
+        node = parent
+    end
+    return false
+end
 function C.Chat(box)
     local kind = W.Call(box, "GetChatType") or W.Call(box, "GetAttribute", "chatType")
     if not kind then return end

@@ -31,6 +31,8 @@ Keys, phrases, paste, clear, undo and numeric adjustments update the selected na
 
 **Chat Send invokes the actual chat field's native Enter handler.** WoW handles slash/addon commands, localized channel prefixes, whispers, autocomplete, history and sticky channels. Typing `/p ` can immediately switch the destination and phrase context. No custom slash parser, raw chat-message fallback, private focus-manager mutation or synthetic keyboard/hardware event is used. A completed Send closes the keyboard and releases retained native chat focus, including controller/IM chat. Autocomplete and errors that leave text to review retain the editing session. Native secure-command restrictions still apply; protected-action behavior requires actual-client testing. Generic-field Done closes the keyboard without invoking purchase/craft/search Enter handlers.
 
+Auction House quantity/count fields stay under native control and do not activate this keyboard, including through its open/focus shortcuts. Auction House search and price inputs remain available.
+
 Numeric amount mode uses D-pad up/down for one and left/right for ten, clamped to exposed limits. Delete's face button switches to digit mode; Shift's face button deletes. Numeric presets replace the quantity. Unknown maxima remain unknown. Use the original window's own purchase/craft action afterward.
 
 ## Phrases and layout
@@ -50,7 +52,7 @@ The default position is above ChatFrame1. Native Edit Mode exposes addon-owned p
 - `/wec layout`: position controls; `/wec on` and `/wec off`: activation.
 - `/wec diag`: build/mode/capture and raw callback counts, without logging text.
 
-All **27 Lua 5.1 host checks** pass. The 14-file package and installed copy are checked against the SHA-256 manifest. UIForever 1.60.1.70450/interface 16001 passed live native-field editing, real canvas key/tab clicks, refocus/undo, native slash and addon-command handling, quantities without Enter execution, isolated phrase composition, startup suppression and 20 pt layout checks at 1080p. Registered gamepad callbacks were invoked from Lua with explicit neutral fixtures; no physical controller was attached. Final isolated diagnostics were clean. The simulator predates source 1.60.1.70862 at 9dc84f0d3bbae1768ac3405b3716000bd93eda06; real-controller input priority, secure/combat behavior, native-field breadth and actual restart persistence remain pending.
+All **28 Lua 5.1 host checks** pass. The 14-file package and installed copy are checked against the SHA-256 manifest. UIForever 1.60.1.70450/interface 16001 passed live native-field editing, real canvas key/tab clicks, refocus/undo, native slash and addon-command handling, quantities without Enter execution, isolated phrase composition, startup suppression and 20 pt layout checks at 1080p. Registered gamepad callbacks were invoked from Lua with explicit neutral fixtures; no physical controller was attached. Final isolated diagnostics were clean. The simulator predates source 1.60.1.70862 at 9dc84f0d3bbae1768ac3405b3716000bd93eda06; real-controller input priority, secure/combat behavior, native-field breadth and actual restart persistence remain pending.
 
 ## Build and test
 

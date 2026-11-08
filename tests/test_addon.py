@@ -387,6 +387,32 @@ class AddonTests(unittest.TestCase):
             assert(W.Contexts.Describe(money.GoldBox).key~=W.Contexts.Describe(money.SilverBox).key)
         ''')
 
+    def test_auction_quantities_keep_native_focus_without_keyboard_capture(self):
+        self.run_lua('''
+            W.db.activation="always"
+            local k=W.Keyboard;local ah=CreateFrame("Frame","AuctionHouseFrame",UIParent)
+            local display=CreateFrame("Frame",nil,ah)
+            display.QuantityInput=CreateFrame("Frame",nil,display)
+            local count=HOST.Field(nil,"12",true,display.QuantityInput)
+            local changes=0;count:SetScript("OnTextChanged",function()changes=changes+1 end)
+            count:SetFocus();W.WatchFocus()
+            assert(not k.frame:IsShown() and not W.Input.active and not k:Open(count))
+            assert(not W.FocusBinding());W.OpenBinding();SlashCmdList.WOWENHANCEDCONTROLLER("open")
+            assert(not k.frame:IsShown() and count:HasFocus() and count:GetText()=="12" and changes==0)
+            local search=HOST.Field("AuctionHouseSearchBox","copper",false,ah)
+            search:SetFocus();W.WatchFocus();assert(k.frame:IsShown() and k.session.target==search)
+            count:SetFocus();assert(not W.FocusBinding())
+            assert(not k.frame:IsShown() and not W.Input.active and count:HasFocus())
+            search:SetFocus();W.WatchFocus();count:SetFocus();W.WatchFocus()
+            assert(not k.frame:IsShown() and k.session==nil and count:HasFocus() and changes==0)
+            local price=HOST.Field("AuctionHouseGoldBox","5",true,ah)
+            price:SetFocus();W.WatchFocus();assert(k.session.target==price and k.frame:IsShown())
+            k:Close();local craft=HOST.Field("ProfessionsQuantityInput","3",true)
+            assert(W.Usable(craft) and k:Open(craft))
+            local named=HOST.Field("AuctionHouseItemCount","4",true,ah)
+            assert(not W.Usable(named))
+        ''')
+
     def test_controller_library_can_unbind_resolve_conflict_and_edit_scope(self):
         self.run_lua('''
             local box=HOST.Field("ChatFrame1EditBox","");box:SetAttribute("chatType","PARTY");W.Keyboard:Open(box)

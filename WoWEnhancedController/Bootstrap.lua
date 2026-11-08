@@ -15,7 +15,7 @@ function W.Usable(box)
     return box and not W.Secret(box) and not box.wecOwned
         and W.Call(box, "IsObjectType", "EditBox") and W.Call(box, "IsVisible")
         and W.Call(box, "IsEnabled") ~= false and W.Call(box, "IsPassword") ~= true
-        and W.Call(box, "IsForbidden") ~= true
+        and W.Call(box, "IsForbidden") ~= true and not W.Contexts.NativeAuctionQuantity(box)
 end
 function W.Focus()
     if not GetCurrentKeyBoardFocus then return end
@@ -25,6 +25,10 @@ end
 function W.WatchFocus()
     if not initialized or not worldReady or W.Combat() or not W.db.enabled or W.Placement.editing or W.OtherKeyboard() then return end
     local K, focus = W.Keyboard, W.Focus()
+    if W.Contexts.NativeAuctionQuantity(focus) then
+        if K.session or K.frame:IsShown() then K:Close() end
+        return
+    end
     -- Ignore a field already focused during login; wait for fresh selection.
     if startupFocus then
         if focus == startupFocus then return end
@@ -73,6 +77,7 @@ local function initialize()
         elseif command == "focus" then W.FocusBinding()
         elseif command == "open" then
             local box = W.Focus()
+            if W.Contexts.NativeAuctionQuantity(box) then return end
             if W.Usable(box) then W.Keyboard:Open(box) else W.Keyboard:Options() end
         else W.Keyboard:Options() end
     end
@@ -158,6 +163,10 @@ BINDING_NAME_WEC_FOCUS = "Focus controller keyboard"
 function W.FocusBinding()
     if not initialized or not W.db.enabled or W.Combat() or W.Blocker() or W.OtherKeyboard() then return false end
     local k, box = W.Keyboard, W.Focus()
+    if W.Contexts.NativeAuctionQuantity(box) then
+        k:Close()
+        return false
+    end
     if W.Usable(box) and (not k.session or k.session.target ~= box) then
         if k.session then k:Close() end
         if not k:Open(box) then return false end
@@ -173,6 +182,7 @@ end
 function W.OpenBinding()
     if not initialized or W.Combat() then return end
     local box = W.Focus()
+    if W.Contexts.NativeAuctionQuantity(box) then return end
     if W.Usable(box) then W.Keyboard:Open(box) else W.Keyboard:Options() end
 end
 
