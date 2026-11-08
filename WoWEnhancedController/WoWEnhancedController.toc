@@ -1,5 +1,7 @@
 ## Interface: 16001
-## Title: WoW Enhanced Controller
+## Title: Enhanced Controller
+## IconTexture: Interface\AddOns\WoWEnhancedController\Media\Icon.tga
+## AddonCompartmentFunc: WoWEnhancedController_OnAddonCompartmentClick
 ## Notes: Native controller keyboard, contextual phrases, and numeric input for WoW Forever.
 ## Author: JBurlison
 ## Version: 0.1.0
@@ -8,9 +10,11 @@
 Namespace.lua
 Text.lua
 Contexts.lua
+NativeField.lua
 Phrases.lua
 Theme.lua
 Placement.lua
 Keyboard.lua
 Input.lua
+Chat.lua
 Bootstrap.lua

@@ -100,6 +100,8 @@ function Text:Adjust(delta)
     local o = self.options
     local n = W.Clamp((tonumber(self.text) or o.min or 0) + delta * (o.step or 1), o.min, o.max)
     local value = o.decimal and ("%.2f"):format(n):gsub("0+$", ""):gsub("%.$", "") or tostring(math.floor(n + 0.000001))
+    -- A digit limit must stop an increment, never turn 99 + 1 into 10 by truncation.
+    if Text.Limit(value, o.maxBytes, o.maxLetters) ~= value then return end
     self:Select(0, #self.text); self:Replace(value)
 end
 function Text:Validate()

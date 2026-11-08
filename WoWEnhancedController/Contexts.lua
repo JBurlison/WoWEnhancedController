@@ -20,7 +20,7 @@ function C.Chat(box)
         if not result.channel then result.unavailable = "This chat channel is no longer joined." end
     elseif kind == "WHISPER" or kind == "BN_WHISPER" then
         result.recipient = W.Call(box, "GetTellTarget") or W.Call(box, "GetAttribute", "tellTarget")
-        result.label = result.label .. " → " .. (result.recipient or "no recipient")
+        result.label = result.label .. " to " .. (result.recipient or "no recipient")
     end
     return result
 end
@@ -38,8 +38,16 @@ function C.Describe(box)
     local names, node = {}, box
     for _ = 1, 10 do
         if not node then break end
-        names[#names + 1] = W.Call(node, "GetName") or ""
-        node = W.Call(node, "GetParent")
+        local nodeName, parent = W.Call(node, "GetName"), W.Call(node, "GetParent")
+        -- Modern Blizzard XML often uses parentKey rather than globally named frames.
+        if not nodeName and parent then
+            for _, key in ipairs({ "SearchBox", "SearchBar", "InputBox", "QuantityInput", "GoldBox", "SilverBox", "CopperBox", "EditBox" }) do
+                local child = parent[key]
+                if not W.Secret(child) and child == node then nodeName = key; break end
+            end
+        end
+        names[#names + 1] = nodeName or ""
+        node = parent
     end
     local path, name = table.concat(names, "/"), W.Call(box, "GetName")
     local c = { key = "field:" .. (name or path), label = name or "Text field",
@@ -77,15 +85,13 @@ function C.Same(a, b)
 end
 function C.Valid(session)
     if not session or not session.target then return false end
-    local owner = session.context.chat and W.Call(session.target, "GetParent") or session.target
-    if not W.Call(owner, "IsVisible") then return false end
+    if session.ownerParent and W.Call(session.target, "GetParent") ~= session.ownerParent then return false end
+    if not W.Call(session.target, "IsVisible") then return false end
     if W.Call(session.target, "IsEnabled") == false then return false end
     if not C.Same(session.ownerContext or session.context, C.Describe(session.target)) then return false end
     if session.context.isCurrent and not session.context.isCurrent(session.target) then return false end
-    if not session.context.chat then
-        local current = W.Call(session.target, "GetText")
-        if current == nil or current ~= session.sourceText then return false end
-    end
+    local current = W.Call(session.target, "GetText")
+    if current == nil or current ~= session.sourceText then return false end
     return true
 end
 
