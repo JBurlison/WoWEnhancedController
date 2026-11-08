@@ -273,6 +273,33 @@ class AddonTests(unittest.TestCase):
             assert(k.frame:IsShown() and k.view=="options" and k.session==nil and W.Input.active)
         ''')
 
+    def test_successful_chat_send_releases_retained_native_focus(self):
+        self.run_lua('''
+            local k=W.Keyboard;local box=HOST.Field("ChatFrame1EditBox","hello")
+            box:SetAttribute("chatType","SAY")
+            local sends=0
+            -- Native gamepad/IM chat clears the message but can leave the
+            -- edit box visible and focused after Enter.
+            box:SetScript("OnEnterPressed",function(field)
+                sends=sends+1;field:SetText("")
+            end)
+            box:SetFocus();HOST.Event("ChatFrame.OnEditBoxFocusGained",box)
+            k:Open(box);HOST.Press("PADRTRIGGER")
+            assert(sends==1 and box:GetText()=="")
+            assert(not box:HasFocus() and not k.frame:IsShown() and not W.Input.active)
+            assert(W.drafts["chat:SAY"]=="")
+            for _,fn in ipairs(HOST.queue)do fn() end;HOST.queue={}
+            W.WatchFocus();assert(not k.frame:IsShown())
+            -- A genuine new focus transaction can open the next message.
+            box:SetFocus();W.WatchFocus();assert(k.frame:IsShown())
+            k:Insert("next");HOST.Press("PADRTRIGGER")
+            assert(sends==2 and not box:HasFocus() and not k.frame:IsShown())
+            local other=HOST.Field("CommandSearch","")
+            box:SetScript("OnEnterPressed",function(field)field:SetText("");other:SetFocus()end)
+            k:Open(box);k:Insert("/open-search");HOST.Press("PADRTRIGGER")
+            assert(other:HasFocus() and not box:HasFocus())
+        ''')
+
     def test_native_parser_context_updates_and_foreign_focus_are_safe(self):
         self.run_lua('''
             local k=W.Keyboard;local box=HOST.Field("ChatFrame1EditBox","");box:SetAttribute("chatType","SAY")

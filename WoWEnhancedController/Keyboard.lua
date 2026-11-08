@@ -470,11 +470,14 @@ function K:Action(action)
             local ok, err = W.SendChat(session.target)
             self.submitting = false
             if self.session ~= session then return end -- a command opened another UI
-            if not W.Usable(session.target) then
-                W.drafts[session.context.key] = ""; self:Close()
+            if not W.Usable(session.target) or (ok and W.Call(session.target, "GetText") == "") then
+                self:Close()
+                if ok then W.drafts[session.context.key] = "" end
+                -- Gamepad/IM chat can clear text without relinquishing focus.
+                -- Let native focus-lost handling return control to the game;
+                -- never clear another field opened by a command or addon.
+                if W.Focus() == session.target then W.Call(session.target, "ClearFocus") end
                 if not ok then W.Print(err) end
-            elseif ok and W.Call(session.target, "GetText") == "" then
-                W.drafts[session.context.key] = ""; self:Close()
             else
                 W.NativeField.Read(self, false, true); self:Draw()
                 self:Status(err or "Review native autocomplete, then press Send.")
