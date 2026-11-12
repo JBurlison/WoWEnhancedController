@@ -1,0 +1,8 @@
+<Bindings>
+    <Binding name="WEC_OPEN" header="WOWENHANCEDCONTROLLER">
+        WoWEnhancedController.OpenBinding()
+    </Binding>
+    <Binding name="WEC_FOCUS">
+        WoWEnhancedController.FocusBinding()
+    </Binding>
+</Bindings>

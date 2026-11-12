@@ -28,9 +28,32 @@ end
 function W.InitDB()
     if type(WoWEnhancedControllerDB) ~= "table" then WoWEnhancedControllerDB = {} end
     W.db = WoWEnhancedControllerDB
-    local defaults = { enabled = true, activation = "controller", style = "Auto", swapNintendo = true,
-        scale = 1, largeKeys = false, phrases = {}, bindings = {}, placements = {}, schema = 1 }
+    local defaults = { enabled = true, activation = "controller", style = "Xbox", swapNintendo = true,
+        scale = 1, fontSize = 14, largeKeys = false, phrases = {}, bindings = {}, placements = {}, schema = 1 }
     for key, value in pairs(defaults) do if W.db[key] == nil then W.db[key] = W.Copy(value) end end
+    W.db.fontSize = math.floor(W.Clamp(tonumber(W.db.fontSize) or 14, 12, 20))
+    if (W.db.schema or 1) < 2 then
+        local bindings = W.db.actionBindings
+        if bindings then
+            if bindings.confirm == "PADFORWARD" then bindings.confirm = nil end
+            if bindings.space == "PADRTRIGGER" then bindings.space = nil end
+        end
+        W.db.schema = 2
+    end
+    if W.db.schema < 3 then
+        if W.db.style == "Auto" then W.db.style = "Xbox" end
+        W.db.schema = 3
+    end
+    if W.db.schema < 4 then
+        local bindings = W.db.actionBindings
+        if bindings and bindings.library == "PADBACK" then bindings.library = nil end
+        W.db.schema = 4
+    end
+    if W.db.schema < 5 then
+        local bindings = W.db.actionBindings
+        if bindings and bindings.symbols == "PADRSTICK" then bindings.symbols = nil end
+        W.db.schema = 5
+    end
 end
 
 function W.ControllerMode()
