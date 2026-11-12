@@ -2,19 +2,62 @@
 ## Title: Enhanced Controller
 ## IconTexture: Interface\AddOns\WoWEnhancedController\Media\Icon.tga
 ## AddonCompartmentFunc: WoWEnhancedController_OnAddonCompartmentClick
-## Notes: Native controller keyboard, contextual phrases, and numeric input for WoW Forever.
+## Notes: Controller keyboard, contextual phrases, and party/raid spell wheels for WoW Forever.
+## Notes-deDE: Controller-Tastatur, kontextbezogene Sätze und Gruppen-/Schlachtzug-Zauberräder für WoW Forever.
+## Notes-frFR: Clavier pour manette, phrases contextuelles et roues de sorts de groupe/raid pour WoW Forever.
+## Notes-esES: Teclado para mando, frases contextuales y ruedas de hechizos de grupo/banda para WoW Forever.
+## Notes-itIT: Tastiera controller, frasi contestuali e ruote incantesimi per gruppo/incursione in WoW Forever.
+## Notes-ptBR: Teclado para controle, frases contextuais e rodas de magia para grupo/raide no WoW Forever.
+## Notes-ruRU: Клавиатура геймпада, контекстные фразы и колёса заклинаний группы/рейда для WoW Forever.
+## Notes-koKR: WoW Forever용 컨트롤러 키보드, 상황별 문구 및 파티/공격대 주문 휠입니다.
+## Notes-zhCN: 为 WoW Forever 提供手柄键盘、情境短语以及队伍/团队法术轮盘。
+## Notes-zhTW: 為 WoW Forever 提供控制器鍵盤、情境片語及隊伍／團隊法術輪盤。
+## Notes-esMX: Teclado para mando, frases contextuales y ruedas de hechizos de grupo/banda para WoW Forever.
 ## Author: JBurlison
-## Version: 0.1.0
+## Version: 0.19.0
 ## SavedVariables: WoWEnhancedControllerDB
-## OptionalDeps: Blizzard_EditMode, Blizzard_AuctionHouseUI, Blizzard_Professions, Blizzard_MailFrame
+## OptionalDeps: Blizzard_EditMode, Blizzard_AuctionHouseUI, Blizzard_Professions, Blizzard_MailFrame, Blizzard_RestrictedAddOnEnvironment, Blizzard_Settings_Shared
 Namespace.lua
+Locale.lua
+Locales/deDE.lua
+Locales/frFR.lua
+Locales/esES.lua
+Locales/itIT.lua
+Locales/ptBR.lua
+Locales/ruRU.lua
+Locales/koKR.lua
+Locales/zhCN.lua
+Locales/zhTW.lua
 Text.lua
 Contexts.lua
 NativeField.lua
 Phrases.lua
 Theme.lua
+KeyboardTheme.lua
 Placement.lua
 Keyboard.lua
 Input.lua
+ControlBindings.lua
+KeyboardBindings.lua
+Links.lua
+QuickMove.lua
+RadialData.lua
+IconPicker.lua
+IconPicker.xml
+RadialSecure.lua
+Radial.lua
+RadialSweep.lua
+RadialEditor.lua
+MacroCompiler.lua
+MacroData.lua
+MacroTemplates.lua
+MacroStyle.lua
+MacroEditor.lua
+MacroBuilder.lua
+Settings.lua
+BindingEditor.lua
+Appearance.lua
+MinimapTargets.lua
+Launcher.lua
 Chat.lua
 Bootstrap.lua

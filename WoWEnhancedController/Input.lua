@@ -1,14 +1,16 @@
 local _, W = ...
 local I = { held = {}, active = false, counters = { down = 0, up = 0, stick = 0 } }
 W.Input = I
-I.defaults = { primary = "PAD1", back = "PAD2", delete = "PAD3", shift = "PAD4", left = "PADLSHOULDER",
-    right = "PADRSHOULDER", space = "PADRSTICK", symbols = "", clear = "PADLSTICK",
-    confirm = "PADRTRIGGER", library = "PADFORWARD", phrases = "PADLTRIGGER" }
-I.actionOrder = { "primary", "back", "delete", "shift", "left", "right", "space", "symbols", "clear", "confirm", "library", "phrases" }
+I.defaults = { primary = "PAD1", back = "PAD2", delete = "PAD3", shift = "PAD4", left = "",
+    right = "", space = "PADRSTICK", symbols = "PADLSTICK", clear = "",
+    confirm = "PADRTRIGGER", library = "PADFORWARD", phrases = "PADLTRIGGER",
+    phrasesLeft = "PADLSHOULDER", phrasesRight = "PADRSHOULDER" }
+I.actionOrder = { "primary", "back", "delete", "shift", "left", "right", "space", "symbols", "clear", "confirm", "library", "phrases", "phrasesLeft", "phrasesRight" }
+I.modifiers = { "phrasesLeft", "phrases", "phrasesRight" }
 local styles = {
-    Generic = { PAD1="P1", PAD2="P2", PAD3="P3", PAD4="P4", PADLSHOULDER="L1", PADRSHOULDER="R1", PADLTRIGGER="L2", PADRTRIGGER="R2", PADLSTICK="L3", PADRSTICK="R3", PADFORWARD="Menu", PADBACK="View" },
-    Xbox = { PAD1="A", PAD2="B", PAD3="X", PAD4="Y", PADLSHOULDER="LB", PADRSHOULDER="RB", PADLTRIGGER="LT", PADRTRIGGER="RT", PADLSTICK="L3", PADRSTICK="R3", PADFORWARD="Menu", PADBACK="View" },
-    PlayStation = { PAD1="Cross", PAD2="Circle", PAD3="Square", PAD4="Triangle", PADLSHOULDER="L1", PADRSHOULDER="R1", PADLTRIGGER="L2", PADRTRIGGER="R2", PADLSTICK="L3", PADRSTICK="R3", PADFORWARD="Options", PADBACK="Create" },
+    Generic = { PAD1="P1", PAD2="P2", PAD3="P3", PAD4="P4", PADLSHOULDER="L1", PADRSHOULDER="R1", PADLTRIGGER="L2", PADRTRIGGER="R2", PADLSTICK="L3", PADRSTICK="R3", PADFORWARD=W.L["Menu"], PADBACK=W.L["View"] },
+    Xbox = { PAD1="A", PAD2="B", PAD3="X", PAD4="Y", PADLSHOULDER="LB", PADRSHOULDER="RB", PADLTRIGGER="LT", PADRTRIGGER="RT", PADLSTICK="L3", PADRSTICK="R3", PADFORWARD=W.L["Menu"], PADBACK=W.L["View"] },
+    PlayStation = { PAD1=W.L["Cross"], PAD2=W.L["Circle"], PAD3=W.L["Square"], PAD4=W.L["Triangle"], PADLSHOULDER="L1", PADRSHOULDER="R1", PADLTRIGGER="L2", PADRTRIGGER="R2", PADLSTICK="L3", PADRSTICK="R3", PADFORWARD=W.L["Options"], PADBACK=W.L["Create"] },
     Nintendo = { PAD1="B", PAD2="A", PAD3="Y", PAD4="X", PADLSHOULDER="L", PADRSHOULDER="R", PADLTRIGGER="ZL", PADRTRIGGER="ZR", PADLSTICK="LS", PADRSTICK="RS", PADFORWARD="+", PADBACK="−" },
 }
 function I:Style()
@@ -47,17 +49,28 @@ function I:Refresh()
             if self.reverse[token] then self.keys[action] = "" else self.reverse[token] = action end
         end
     end
+    for action, key in pairs(W.db.textKeys or {}) do
+        if type(key)=="string" and key~="" and not self.reverse[key] then self.reverse[key]=action end
+    end
     self:ResetHeld()
+    if self.active and W.KeyboardBindings and not W.KeyboardBindings:Acquire() then self:Release() end
 end
 function I:Hint(action)
     local token = self.keys and self.keys[action]
-    if not token or token == "" then return "Unbound" end
+    if not token or token == "" then return W.L["Unbound"] end
     return "[" .. ((styles[self:Style()] or {})[token] or token) .. "]"
 end
-function I:PhraseHint(action)
+local padDirections={PADDUP="Up",PADDDOWN="Down",PADDLEFT="Left",PADDRIGHT="Right"}
+function I:TokenLabel(token)
+    local dir=padDirections[token]
+    if dir then return W.L["D-pad"].." "..W.L[dir] end
+    return (styles[self:Style()] or {})[token] or token
+end
+function I:PhraseHint(action, bank)
+    bank = bank or "phrases"
     if not action or action == "unbound" then return "" end
-    if not self.keys[action] or self.keys[action] == "" or self.keys.phrases == "" then return "" end
-    return self:Hint("phrases") .. "+" .. self:Hint(action)
+    if not self.keys[action] or self.keys[action] == "" or self.keys[bank] == "" then return "" end
+    return self:Hint(bank) .. "+" .. self:Hint(action)
 end
 -- Native Forever atlases from InputIconTexture.lua at the task's source pin.
 -- Tokens describe physical positions; Nintendo A-confirm changes the binding,
@@ -69,10 +82,16 @@ local iconParts = {
 }
 function I:Icon(action)
     local token = self.keys and self.keys[action]
+    return self:TokenIcon(token)
+end
+function I:TokenIcon(token)
     if not token or token == "" then return end
     local style = self:Style()
     if style == "Generic" then style = "Xbox" end -- Native Generic uses the Xbox set.
     local part = iconParts[style] and iconParts[style][token]
+    local direction=token=="PADDUP" and "up" or token=="PADDDOWN" and "down"
+        or token=="PADDLEFT" and "left" or token=="PADDRIGHT" and "right"
+    if direction then part="dpad"..(style=="Nintendo" and "-" or "")..direction end
     if part then
         local prefix = style == "Nintendo" and "gamepad-switch-128x-" or style == "PlayStation" and "gamepad-ps-" or "gamepad-xbox1-"
         return prefix .. part .. "-normal"
@@ -85,54 +104,124 @@ function I:Icon(action)
 end
 function I:ResetHeld()
     self.held, self.layer, self.stickDirection, self.stickNext = {}, false, nil, nil
+    self.placementAt = nil
+    if W.Keyboard then W.Keyboard:PaintQuickBank() end
     self.waitNeutral = true
+end
+-- Capture belongs to a visible addon window, not to its close button. Keep
+-- deferred combat changes here so a hidden window cannot retain capture after
+-- lockdown ends. Never register addon windows with Blizzard's focus manager.
+function I:SetCapture(frame, buttons, sticks)
+    self.pendingCapture = self.pendingCapture or {}
+    if W.Combat() then
+        self.pendingCapture[frame] = { buttons = buttons, sticks = sticks }
+        return false
+    end
+    self.pendingCapture[frame] = nil
+    local ok = true
+    for _, item in ipairs({ { "Button", buttons }, { "Stick", sticks } }) do
+        if item[2] ~= nil then
+            local enabled = item[2] and frame:IsVisible() or false
+            if W.Call(frame, "IsGamePad" .. item[1] .. "Enabled") ~= enabled then
+                self.releaseStage = "EnableGamePad" .. item[1] .. "(" .. tostring(enabled) .. ")"
+                local success = pcall(frame["EnableGamePad" .. item[1]], frame, enabled)
+                self.releaseStage = nil
+                if not success then ok = false end
+            end
+        end
+    end
+    return ok
+end
+function I:FlushCapture()
+    if W.Combat() then return end
+    local pending = self.pendingCapture or {}
+    self.pendingCapture = {}
+    for frame, state in pairs(pending) do self:SetCapture(frame, state.buttons, state.sticks) end
+end
+function I:RefreshWindowCapture(frame)
+    local state = self.windows and self.windows[frame]
+    if not state then return end
+    local enabled = frame:IsVisible() and not (W.Blocker and W.Blocker())
+    self:SetCapture(frame, enabled and (not state.buttons or state.buttons()), enabled and state.sticks)
+end
+function I:TrackWindow(frame, reset, sticks, buttons)
+    self.windows = self.windows or {}
+    self.windows[frame] = { reset = reset, sticks = sticks == true, buttons = buttons }
+    local function refresh()
+        reset()
+        self:RefreshWindowCapture(frame)
+    end
+    frame:HookScript("OnShow", refresh)
+    frame:HookScript("OnHide", refresh)
+    refresh() -- Setting gamepad scripts can itself enable capture.
+end
+function I:RefreshWindows()
+    if W.MacroEditor and W.MacroEditor.frame then W.MacroEditor:SyncControls() end
+    for frame, state in pairs(self.windows or {}) do
+        state.reset()
+        self:RefreshWindowCapture(frame)
+    end
 end
 function I:Eligible()
     local k = W.Keyboard
-    if k.session and not k.composing and W.Call(k.session.target, "HasFocus") ~= true then return false end
-    if k.composing and W.Call(k.input, "HasFocus") ~= true then return false end
+    local owner = k:InputOwner()
+    if owner and W.Call(owner, "HasFocus") ~= true then return false end
+    if k.assigning and not owner and W.Usable(W.Focus()) then return false end
     return W.db and W.db.enabled and W.Keyboard.frame:IsShown() and not W.Combat() and not W.OtherKeyboard()
         and not (W.Blocker and W.Blocker())
 end
 function I:Acquire(explicit)
     if not self:Eligible() or (not explicit and not W.ControllerMode()) then return false end
     local f = W.Keyboard.frame
-    local buttons = pcall(f.EnableGamePadButton, f, true)
-    local sticks = pcall(f.EnableGamePadStick, f, true)
-    if not buttons or not sticks or W.Call(f, "IsGamePadButtonEnabled") == false then
-        self.active = false; self.failure = "Controller capture unavailable in this client state."
+    if W.Radial then W.Radial:SyncOwnership() end
+    -- Buttons use the binding dispatcher exclusively. A raw event plus a
+    -- gameplay binding must never perform two actions for the same press.
+    local captured = self:SetCapture(f, false, true)
+    if not captured or W.Call(f, "IsGamePadButtonEnabled") ~= false or not W.KeyboardBindings:Acquire() then
+        self:Release(); self.failure = W.L["Controller capture unavailable in this client state."]
         W.Keyboard:Status(self.failure); return false
     end
     self.active = true; self:ResetHeld()
     return true
 end
 function I:Release()
-    self.active = false; self:ResetHeld()
-    if W.Keyboard.frame and not W.Combat() then
-        pcall(W.Keyboard.frame.EnableGamePadButton, W.Keyboard.frame, false)
-        pcall(W.Keyboard.frame.EnableGamePadStick, W.Keyboard.frame, false)
-    end
+    self.active = false
+    if W.KeyboardBindings then W.KeyboardBindings:Release() end
+    self:ResetHeld()
+    if W.Keyboard.frame then self:SetCapture(W.Keyboard.frame, false, false) end
 end
 function I:Remap(token)
     local k = W.Keyboard
-    if token:match("^PADD") then k:Status("D-pad directions are reserved for navigation."); return end
+    if token:match("^PADD") then k:Status(W.L["D-pad directions are reserved for navigation."]); return end
     if token == self.keys.focus then k.remapping = nil; self:Refresh(); k:Draw(); return end
     if token == "PADLSHOULDER" or token == "PADRSHOULDER" then
         k.remapIndex = ((k.remapIndex - 1 + (token == "PADLSHOULDER" and -1 or 1)) % #self.actionOrder) + 1
-        k:Status("Remap " .. self.actionOrder[k.remapIndex] .. ": press button; Focus finishes")
+        k:Status(W.L.Format("Remap %s: press button; Focus finishes", W.L[self.actionOrder[k.remapIndex]]))
         return
     end
     local action = self.actionOrder[k.remapIndex]
     local chosen = token == "PADLSTICK" and "" or token
     if chosen ~= "" and self.reverse[chosen] and self.reverse[chosen] ~= action then
-        k:Status("Used by " .. self.reverse[chosen] .. ". Unbind that action first."); return
+        k:Status(W.L.Format("Used by %s. Unbind that action first.", W.L[self.reverse[chosen]])); return
     end
     W.db.actionBindings = W.db.actionBindings or {}; W.db.actionBindings[action] = chosen
-    self:Refresh(); k:Status("Assigned " .. action .. ". Shoulders choose action; Focus finishes.")
+    self:Refresh(); k:Status(W.L.Format("Assigned %s. Shoulders choose action; Focus finishes.", W.L[action]))
+end
+function I:IsModifier(action)
+    return action == "phrases" or action == "phrasesLeft" or action == "phrasesRight"
+end
+function I:UpdateLayer()
+    local bank, serial
+    for _, record in pairs(self.held) do
+        if record.modifier and (not serial or record.serial > serial) then bank, serial = record.modifier, record.serial end
+    end
+    self.layer = bank or false
+    if bank and not W.Keyboard.composing then W.Keyboard:SetQuickBank(bank) end
+    W.Keyboard:PaintQuickBank()
 end
 function I:Down(token)
     self.counters.down = self.counters.down + 1
-    W.lastPad = true
+    if W.ControlBindings.IsPad(token) then W.lastPad = true end
     if not self.active or not self:Eligible() or self.waitNeutral or self.held[token] then return false end
     self.padAt = GetTime()
     local k = W.Keyboard
@@ -140,17 +229,24 @@ function I:Down(token)
     local action = self.reverse[token]
     local record = { action = action, session = k.session, generation = k.generation, at = GetTime() + 0.4 }
     self.held[token] = record
-    if token == self.keys.phrases then
+    if (k.linking or k.channels) and action ~= "primary" and action ~= "back" and action ~= "focus" and not token:match("^PADD") then
+        record.layer = true; return false
+    end
+    if self:IsModifier(action) then
         -- A modifier pressed midway through a Send press must cancel Send too.
         for heldToken, heldRecord in pairs(self.held) do
-            if heldToken ~= token then heldRecord.layer = true end
+            if heldToken ~= token then heldRecord.layer = true; heldRecord.phrase = nil end
         end
-        self.layer = true; return false
+        self.modifierSerial = (self.modifierSerial or 0) + 1
+        record.modifier, record.serial = action, self.modifierSerial
+        self:UpdateLayer(); record.generation = k.generation
+        return false
     end
     if action == "focus" then return false end
     if self.layer then
         record.layer = true
-        local bindings = W.Phrases.Bindings(k:Context())
+        record.bank = self.layer
+        local bindings = W.Phrases.Bindings(k:Context(), record.bank)
         for slot, assigned in ipairs(bindings) do if assigned == action then record.phrase = slot; break end end
         return false
     end
@@ -161,12 +257,15 @@ end
 function I:Up(token)
     self.counters.up = self.counters.up + 1
     local record = self.held[token]; self.held[token] = nil
-    if token == (self.keys and self.keys.phrases) then self.layer = false end
+    if record and record.modifier then
+        if self.active and self:Eligible() and not self.waitNeutral then self:UpdateLayer() else self:ResetHeld() end
+        return false
+    end
     if not record or not self.active or not self:Eligible() or self.waitNeutral then return false end
     local k = W.Keyboard
     if record.session ~= k.session or record.generation ~= k.generation then return false end
     if record.action == "focus" then W.FocusBinding()
-    elseif record.phrase then k:InsertPhrase(record.phrase)
+    elseif record.phrase then k:UsePhrase(record.phrase, record.bank)
     elseif not record.layer and not self.layer and not record.direction and record.action then
         local action = record.action
         if k:Numeric() and k.view == "keys" then
@@ -181,6 +280,13 @@ function I:Stick(stick, x, y)
     if not self.active or not self:Eligible() then return true end
     if stick ~= "Movement" then return true end
     if self.waitNeutral then return false end
+    if W.Placement.editing and W.Keyboard.positionId == "radial" then
+        self.stickDirection = nil
+        if x*x + y*y < .04 then self.placementAt = nil; return false end
+        self.placementX, self.placementY = x, y
+        self.placementAt = self.placementAt or GetTime()
+        return false
+    end
     local direction
     if math.max(math.abs(x), math.abs(y)) > 0.45 then
         direction = math.abs(x) > math.abs(y) and (x > 0 and "right" or "left") or (y > 0 and "up" or "down")
@@ -196,14 +302,26 @@ function I:MoveStick(direction)
     W.Keyboard:Move(unpack(d[direction]))
 end
 function I:Update()
+    if W.KeyboardBindings then W.KeyboardBindings:Update() end
     if not self.active then return end
     if not self:Eligible() then self:Release(); return end
     if self.waitNeutral then if self:Neutral() then self.waitNeutral = false end; return end
     local now = GetTime()
+    if self.placementAt then
+        if W.Placement.editing and W.Keyboard.positionId == "radial" then
+            local distance = math.min(now - self.placementAt, .1) * 360
+            self.placementAt = now
+            if distance > 0 then W.Placement.Nudge("radial", self.placementX * distance, self.placementY * distance) end
+        else self.placementAt = nil end
+    end
     for token, record in pairs(self.held) do
-        if IsKeyDown and not IsKeyDown(token) then
+        if IsKeyDown and not IsKeyDown(token:match("[^-]+$")) then
             -- Lost release can cancel a latch, never execute it.
-            self.held[token] = nil; if token == self.keys.phrases then self.layer = false end
+            self.held[token] = nil
+            if record.modifier then
+                for _, pending in pairs(self.held) do if pending.bank == record.modifier then pending.phrase = nil; pending.layer = true end end
+                self:UpdateLayer()
+            end
         elseif record.direction and now >= record.at then
             W.Keyboard:Move(unpack(record.direction)); record.at = now + 0.09
         end

@@ -17,7 +17,7 @@ function F.Read(k, remember, adoptContext)
     if adoptContext then
         local context = W.Contexts.Describe(s.target)
         local changed = not W.Contexts.Same(s.context, context)
-        if changed and s.context.chat then W.drafts[s.context.key] = "" end
+        if changed and s.context.chat then W.drafts[W.Contexts.DraftKey(s.context)] = "" end
         s.context, s.ownerContext, e.options = context, W.Copy(context), context
         return true, changed
     end
@@ -50,7 +50,7 @@ function F.Write(k)
         s.appliedCursor, s.appliedAnchor = e.cursor, e.anchor
     end
     k.syncing = false
-    if not ok then k:Status("The native field rejected this edit.") end
+    if not ok then k:Status(W.L["The native field rejected this edit."]) end
     return ok
 end
 
@@ -60,7 +60,7 @@ function F.Insert(k, value)
     k.syncing = true
     local ok = pcall(s.target.Insert, s.target, value)
     k.syncing = false
-    if not ok then k:Status("The native field rejected this text."); return false end
+    if not ok then k:Status(W.L["The native field rejected this text."]); return false end
     local changed = W.Call(s.target, "GetText") ~= k.editor.text
     if changed then k.editor:Remember() end
     F.Read(k, false, true)
@@ -73,6 +73,30 @@ function F.Attach(k, box)
     k.fieldHooks[box] = true
     box:HookScript("OnEditFocusGained", function(field)
         if W.dismissed == field then W.dismissed = nil end
+    end)
+    box:HookScript("OnEditFocusLost", function(field)
+        local session = k.session
+        if not session or session.target ~= field or (k.composing and k.composing.typing) or k.syncing or k.submitting or k.mouseEditing then return end
+        W.Input.active = false
+        -- Native Escape and mouse focus changes must finish their own focus
+        -- transaction first. Do not restore a field they just dismissed.
+        C_Timer.After(0, function()
+            if k.session ~= session or (k.composing and k.composing.typing) or k.mouseEditing then return end
+            if W.Focus() == field then
+                if not W.Input.active then W.Input:Acquire() end
+                return
+            end
+            if W.Blocker() then k.suspended = true; k:Hide()
+            else k:Close() end
+        end)
+    end)
+    box:HookScript("OnHide", function(field)
+        local session = k.session
+        if not session or session.target ~= field then return end
+        W.Input.active = false
+        C_Timer.After(0, function()
+            if k.session == session and not W.Call(field,"IsVisible") then k:Close() end
+        end)
     end)
     box:HookScript("OnTextChanged", function(field, userInput)
         local s = k.session

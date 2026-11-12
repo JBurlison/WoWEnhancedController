@@ -7,12 +7,13 @@ import xml.etree.ElementTree as ET
 
 root = Path(__file__).resolve().parents[1]
 addon = root / "WoWEnhancedController"
-package = root / "dist/WoWEnhancedController-0.1.0-forever.zip"
 toc = addon / "WoWEnhancedController.toc"
-loads = [line.strip() for line in toc.read_text().splitlines() if line.strip() and not line.startswith("#")]
+version = next(line.split(':', 1)[1].strip() for line in toc.read_text(encoding="utf-8").splitlines() if line.startswith('## Version:'))
+package = root / f"dist/WoWEnhancedController-{version}-forever.zip"
+loads = [line.strip() for line in toc.read_text(encoding="utf-8").splitlines() if line.strip() and not line.startswith("#")]
 expected = {"WoWEnhancedController.toc", "Bindings.xml", *loads}
 expected.update(path.relative_to(addon).as_posix() for path in (addon / "Media").rglob("*") if path.is_file())
-icon_line = next(line for line in toc.read_text().splitlines() if line.startswith("## IconTexture:"))
+icon_line = next(line for line in toc.read_text(encoding="utf-8").splitlines() if line.startswith("## IconTexture:"))
 icon_ref = icon_line.split(":", 1)[1].strip()
 icon_prefix = "Interface\\AddOns\\WoWEnhancedController\\"
 assert icon_ref.startswith(icon_prefix), icon_ref
@@ -33,7 +34,7 @@ with zipfile.ZipFile(package) as archive:
         source = (addon / name).read_bytes()
         assert source == archive.read("WoWEnhancedController/" + name), name
         hashes[name] = hashlib.sha256(source).hexdigest()
-report = {"target": "forever", "version": "0.1.0", "sourcePin": "9dc84f0d3bbae1768ac3405b3716000bd93eda06",
+report = {"target": "forever", "version": version, "sourcePin": "4cd0ab752a77164f654ccbca9d0c1fe8dafceebe",
           "packageSha256": hashlib.sha256(package.read_bytes()).hexdigest(), "files": hashes}
 (root / "dist/manifest.json").write_text(json.dumps(report, indent=2) + "\n")
 print(f"PASS: {len(expected)} packaged files match source; TOC and Bindings.xml valid; SHA-256 manifest saved.")

@@ -12,10 +12,11 @@ class AddonTests(unittest.TestCase):
     def setUp(self):
         self.lua = LuaRuntime(unpack_returned_tuples=True)
         self.lua.execute((ROOT / "tests/host.lua").read_text(encoding="utf-8"))
+        self.lua.execute((ROOT / "tests/settings_host.lua").read_text(encoding="utf-8"))
         namespace = self.lua.table()
         self.lua.globals().W = namespace
         toc = ROOT / "WoWEnhancedController/WoWEnhancedController.toc"
-        for line in toc.read_text().splitlines():
+        for line in toc.read_text(encoding="utf-8").splitlines():
             if line.endswith(".lua"):
                 source = (toc.parent / line).read_text(encoding="utf-8")
                 self.lua.execute("return function(...)\n" + source + "\nend")("WoWEnhancedController", namespace)
@@ -25,22 +26,43 @@ class AddonTests(unittest.TestCase):
     def run_lua(self, source):
         self.lua.execute(source)
 
-    def test_native_addon_menu_metadata_entry_opens_options(self):
-        toc = (ROOT / "WoWEnhancedController/WoWEnhancedController.toc").read_text()
+    def test_native_block_during_release_does_not_reenter_cleanup_and_records_caller(self):
+        self.run_lua('''
+            local k,i=W.Keyboard,W.Input;local box=HOST.Field("ChatFrame1EditBox","keep")
+            k:Open(box);local f=k.frame;local count,printed=0,0
+            local original=f.EnableGamePadStick
+            f.EnableGamePadStick=function(self,on)
+                count=count+1;assert(count<3,"recursive release")
+                W.events:GetScript("OnEvent")(W.events,"ADDON_ACTION_BLOCKED","WoWEnhancedController","SetPreferredGamepadInteractTarget()")
+                return original(self,on)
+            end
+            debugstack=function()return "NativeActionBar:UpdateInteractIcons"end
+            W.Print=function()printed=printed+1 end
+            k:Close()
+            assert(count==1 and not i.active and not k.frame:IsShown()and box:GetText()=="keep")
+            assert(i.blockedAction.stage=="EnableGamePadStick(false)"and i.blockedAction.stack:find("NativeActionBar",1,true))
+            W.events:GetScript("OnEvent")(W.events,"ADDON_ACTION_BLOCKED","WoWEnhancedController","SetPreferredGamepadInteractTarget()")
+            assert(count==1 and printed==1 and not i.handlingBlockedAction)
+            W.events:GetScript("OnEvent")(W.events,"ADDON_ACTION_BLOCKED","OtherAddon","OtherCall")
+            assert(count==1 and printed==1)
+        ''')
+
+    def test_native_addon_menu_metadata_entry_opens_launcher(self):
+        toc = (ROOT / "WoWEnhancedController/WoWEnhancedController.toc").read_text(encoding="utf-8")
         callback = next(line.split(":", 1)[1].strip() for line in toc.splitlines()
                         if line.startswith("## AddonCompartmentFunc:"))
         self.lua.globals()[callback]("WoWEnhancedController", "LeftButton")
         self.run_lua('''
-            assert(W.Keyboard.frame:IsShown() and W.Keyboard.view=="options" and W.Input.active)
+            assert(W.Launcher:IsShown() and not W.Keyboard.frame:IsShown() and not W.Input.active)
             assert(#HOST.sent==0)
-            W.Keyboard:Close();HOST.combat=true
+            W.Launcher:Close();HOST.combat=true
         ''')
         self.lua.globals()[callback]("WoWEnhancedController", "LeftButton")
         self.run_lua('assert(not W.Keyboard.frame:IsShown())')
 
     def test_xbox_default_migration_and_optional_auto(self):
         self.run_lua('''
-            assert(W.db.style=="Xbox" and W.db.schema==5)
+            assert(W.db.style=="Xbox" and W.db.schema==6)
             HOST.pad.labelStyle="Reverse";W.Input:Refresh()
             assert(W.Input.keys.primary=="PAD1" and W.Input.keys.back=="PAD2")
             assert(W.Input:Icon("primary")=="gamepad-xbox1-buttona-normal")
@@ -53,7 +75,7 @@ class AddonTests(unittest.TestCase):
             assert(W.db.style=="Auto" and W.Input.keys.primary=="PAD2")
             W.db.schema=3;W.db.actionBindings={library="PADBACK",delete="PAD5"}
             W.InitDB();W.Input:Refresh()
-            assert(W.db.schema==5 and W.Input.keys.library=="PADFORWARD" and W.Input.keys.delete=="PAD5")
+            assert(W.db.schema==6 and W.Input.keys.library=="PADFORWARD" and W.Input.keys.delete=="PAD5")
             W.db.schema=3;W.db.actionBindings.library="PAD6";W.InitDB();W.Input:Refresh()
             assert(W.Input.keys.library=="PAD6")
         ''')
@@ -84,9 +106,9 @@ class AddonTests(unittest.TestCase):
             assert(W.Input.keys.confirm=="PADRTRIGGER" and W.Input.keys.space=="PADRSTICK")
             HOST.Press("PADBACK");assert(W.Input.active and #HOST.sent==0)
             assert(W.Keyboard.editor.text=="draft")
-            HOST.Press("PADFORWARD");assert(W.Keyboard.view=="phrases" and #HOST.sent==0)
+            HOST.Press("PADFORWARD");assert(W.Keyboard.assigning and W.Keyboard.view=="keys" and #HOST.sent==0)
             assert(W.Keyboard.editor.text=="draft")
-            HOST.Press("PADFORWARD");assert(W.Keyboard.view=="keys")
+            HOST.Press("PADFORWARD");assert(W.Keyboard.view=="keys" and not W.Keyboard.assigning)
             HOST.Press("PADRTRIGGER");assert(#HOST.sent==1 and HOST.sent[1][1]=="draft")
             box:Show();W.Keyboard:Open(box);W.Keyboard:Insert("kept")
             local f=W.Keyboard.frame
@@ -121,7 +143,7 @@ class AddonTests(unittest.TestCase):
             HOST.Press("PADRTRIGGER");assert(box:GetText()=="buffered")
             W.db.schema=1;W.db.actionBindings={confirm="PADFORWARD",space="PADRTRIGGER",delete="PAD5"}
             W.InitDB();W.Input:Refresh()
-            assert(W.db.schema==5 and W.Input.keys.confirm=="PADRTRIGGER")
+            assert(W.db.schema==6 and W.Input.keys.confirm=="PADRTRIGGER")
             assert(W.Input.keys.focus=="PADBACK" and W.Input.keys.space=="PADRSTICK" and W.Input.keys.delete=="PAD5")
             W.db.actionBindings={confirm="PADBACK"};W.Input:Refresh()
             assert(W.Input.reverse.PADBACK=="focus" and W.Input.keys.confirm=="")
@@ -130,83 +152,54 @@ class AddonTests(unittest.TestCase):
     def test_space_shortcut_tabs_and_noninteractive_settings(self):
         self.run_lua('''
             local k=W.Keyboard;local box=HOST.Field("SearchBox","hello");k:Open(box)
-            HOST.Press("PADRSTICK")
-            assert(k.editor.text=="hello " and box:GetText()=="hello " and not k.symbols)
-            assert(W.Input:Icon("space")=="gamepad-xbox1-stick-r3-normal")
-            assert(W.Input.keys.symbols=="")
+            HOST.Press("PADRSTICK");assert(box:GetText()=="hello ")
+            assert(W.Input:Icon("space")=="gamepad-xbox1-stick-r3-normal" and W.Input.keys.symbols=="PADLSTICK")
+            assert(#k.rows[1]==2 and k.rows[1][1].tabSelected)
             local function activate(text)
                 for r,row in ipairs(k.rows)do for c,b in ipairs(row)do
                     if b:GetText()==text then k:Select(r,c);HOST.Press(W.Input.keys.primary);return end
                 end end
                 error("Control not reachable: "..text)
             end
-            assert(k.rows[1][1].tabSelected and not k.rows[1][4].tabSelected)
             activate("Symbols");assert(k.symbols)
-            activate("Options");assert(k.view=="options" and k.rows[1][4].tabSelected)
-            k:Select(2,1);HOST.Press("PADDDOWN")
-            assert(k.rows[1][4].tabSelected) -- selected tab persists as focus moves
-            assert(#k.rows[2]==2 and #k.rows[3]==2 and #k.rows[4]==3)
+            activate("Edit tools");assert(k.view=="tools" and k.rows[1][2].tabSelected)
             for _,row in ipairs(k.rows)do for _,b in ipairs(row)do
-                assert(not b:GetText():find("Scale:",1,true) and b:GetText()~="Controller icons")
+                assert(b:GetText()~="Options" and b:GetText()~="Phrases & bindings" and not b:GetText():find("Slot ",1,true))
             end end
-            activate("Smaller");assert(W.db.scale<1)
-            activate("Reset scale");assert(W.db.scale==1)
-            activate("Phrases & bindings");activate("Next slot");assert(k.slot==2)
-            activate("Insert phrase");assert(#k.editor.text>6)
-            activate("Keyboard");assert(k.labelsUsed==0)
-            for _,text in ipairs(k.labels)do assert(not text:IsShown()) end
-            -- Pooled tab art never survives on ordinary keys.
-            assert(not k.rows[2][1].tabSelected)
+            activate("Keyboard");assert(not k.rows[2][1].tabSelected)
             for _,art in ipairs(k.rows[2][1].tabArt or {})do assert(not art:IsShown()) end
+            HOST.settings.WEC_scale:SetValue(.8);assert(W.db.scale==.8)
             W.db.schema=4;W.db.actionBindings={symbols="PADRSTICK",delete="PAD5"}
             W.InitDB();W.Input:Refresh()
-            assert(W.Input.keys.space=="PADRSTICK" and W.Input.keys.symbols=="" and W.Input.keys.delete=="PAD5")
-            W.db.schema=4;W.db.actionBindings={space="PAD6",symbols="PAD7"}
-            W.InitDB();W.Input:Refresh()
+            assert(W.Input.keys.space=="PADRSTICK" and W.Input.keys.symbols=="PADLSTICK" and W.Input.keys.delete=="PAD5")
+            W.db.schema=4;W.db.actionBindings={space="PAD6",symbols="PAD7"};W.InitDB();W.Input:Refresh()
             assert(W.Input.keys.space=="PAD6" and W.Input.keys.symbols=="PAD7")
         ''')
 
     def test_compact_layout_font_size_and_border_focus(self):
         self.run_lua('''
             local k=W.Keyboard;local box=HOST.Field("SearchBox","draft");k:Open(box)
-            assert(k.frame:GetHeight()==364 and k.frame:GetWidth()==708)
-            assert(not k.destination:IsShown() and k.destination:GetText()=="")
-            k:Status("Review this edit")
-            assert(k.destination:IsShown() and k.destination:GetText()=="Review this edit")
-            assert(box:GetText()=="draft")
-            k:Draw();assert(not k.destination:IsShown() and k.frame:GetHeight()==364)
-            assert(k.title==nil and k.status==nil and k.messageLabel==nil)
+            local height=k.frame:GetHeight()
+            assert(height<=400 and k.frame:GetWidth()>708 and #k.quickButtons==4)
+            assert(not k.destination:IsShown() and k.input==nil)
+            k:Status("Review this edit");assert(k.destination:GetText()=="Review this edit" and box:GetText()=="draft")
+            k:Draw();assert(not k.destination:IsShown() and k.frame:GetHeight()==height)
             assert(k.focusButton:GetParent()==k.frame and k.focusButton:GetText()=="")
             assert(k.focusButton.y==4 and k.focusButton.badgeIcon.atlas==W.Input:Icon("focus"))
             for _,row in ipairs(k.rows)do for _,b in ipairs(row)do assert(b~=k.focusButton) end end
-            local function activate(text)
-                for r,row in ipairs(k.rows)do for c,b in ipairs(row)do
-                    if b:GetText()==text then k:Select(r,c);HOST.Press(W.Input.keys.primary);return end
-                end end
-                error("Control not reachable: "..text)
-            end
-            assert(W.db.fontSize==14 and W.db.scale==1)
-            activate("Options")
-            for i=1,4 do activate("Larger text") end
-            assert(W.db.fontSize==20 and W.db.scale==1)
-            W.InitDB();assert(W.db.fontSize==20)
-            activate("Keyboard");assert(k.frame:GetHeight()==364)
-            assert(k.input==nil and k.inputBorder==nil)
-            local _,size=k.rows[3][1]:GetFontString():GetFont();assert(size==20)
-            _,size=k.rows[3][1].highlightFont:GetFont();assert(size==20)
-            _,size=GameFontNormal:GetFont();assert(size==12) -- native shared font untouched
+            HOST.settings.WEC_fontSize:SetValue(20);assert(W.db.fontSize==20 and W.db.scale==1)
+            W.InitDB();assert(W.db.fontSize==20 and k.input==nil)
+            local _,size=k.rows[2][1]:GetFontString():GetFont();assert(size==20)
+            _,size=k.rows[2][1].highlightFont:GetFont();assert(size==20)
+            _,size=GameFontNormal:GetFont();assert(size==12)
             k.focusButton.action();assert(k.editor.text=="draft" and #HOST.sent==0)
             HOST.Press("PADBACK");assert(k.editor.text=="draft")
-            activate("Options");activate("Reset text");assert(W.db.fontSize==14)
-            activate("Keyboard");assert(k.frame:GetHeight()==364)
+            HOST.settings.WEC_fontSize:SetValue(14)
+            assert(k.frame:GetHeight()==height)
             W.db.fontSize="bad";W.InitDB();assert(W.db.fontSize==14)
-            -- Feedback from a rejected native write must not retry that write
-            -- while redrawing its temporary caption.
-            local attempts=0
-            box.SetText=function() attempts=attempts+1;error("native write rejected") end
+            local attempts=0;box.SetText=function()attempts=attempts+1;error("native write rejected")end
             k.editor:Replace("x");k:Sync()
-            assert(attempts==1 and k.destination:IsShown())
-            assert(k.lastStatus=="The native field rejected this edit.")
+            assert(attempts==1 and k.destination:IsShown() and k.lastStatus=="The native field rejected this edit.")
         ''')
 
     def test_login_does_not_open_keyboard_for_existing_focus(self):
@@ -216,7 +209,7 @@ class AddonTests(unittest.TestCase):
         self.lua.execute('LoginBox=HOST.Field("ChatFrame1EditBox","initial");LoginBox:SetFocus()')
         ns=self.lua.table();self.lua.globals().W=ns
         toc=ROOT / "WoWEnhancedController/WoWEnhancedController.toc"
-        for line in toc.read_text().splitlines():
+        for line in toc.read_text(encoding="utf-8").splitlines():
             if line.endswith(".lua"):
                 self.lua.execute("return function(...)\n"+(toc.parent/line).read_text(encoding="utf-8")+"\nend")("WoWEnhancedController",ns)
         self.run_lua('''
@@ -270,7 +263,7 @@ class AddonTests(unittest.TestCase):
             HOST.Press("PADRTRIGGER");assert(args=="Completed" and #HOST.nativeEnters==2 and not k.frame:IsShown())
             HOST.commands.options=function()k:Options()end
             box:Show();k:Open(box);k:Insert("/options");HOST.Press("PADRTRIGGER")
-            assert(k.frame:IsShown() and k.view=="options" and k.session==nil and W.Input.active)
+            assert(HOST.settingsOpened==1234 and not k.frame:IsShown() and k.session==nil and not W.Input.active)
         ''')
 
     def test_successful_chat_send_releases_retained_native_focus(self):
@@ -309,9 +302,9 @@ class AddonTests(unittest.TestCase):
             end)
             k:Open(box);k:Insert("/p ")
             assert(box:GetText()=="" and k:Context().key=="chat:PARTY" and W.Contexts.Valid(k.session))
-            k:InsertPhrase(2);assert(box:GetText()=="Group?")
+            k:InsertPhrase(2);assert(box:GetText()=="" and HOST.sent[1][1]=="Group?" and HOST.sent[1][2]=="PARTY")
             local other=HOST.Field("OtherSearch","other");other:SetFocus()
-            HOST.Press("PADRSTICK");assert(box:GetText()=="Group?" and other:GetText()=="other")
+            HOST.Press("PADRSTICK");assert(box:GetText()=="" and other:GetText()=="other")
             W.WatchFocus();assert(k.session.target==other)
             HOST.Press("PADRSTICK");assert(other:GetText()=="other ")
         ''')
@@ -319,27 +312,24 @@ class AddonTests(unittest.TestCase):
     def test_phrase_composer_is_the_only_owned_text_field(self):
         self.run_lua('''
             local k=W.Keyboard;local box=HOST.Field("ChatFrame1EditBox","kept");box:SetAttribute("chatType","PARTY");k:Open(box)
-            local function activate(text)
-                for r,row in ipairs(k.rows)do for c,b in ipairs(row)do
-                    if b:GetText()==text then k:Select(r,c);HOST.Press(W.Input.keys.primary);return end
-                end end
-                error("Control not reachable: "..text)
-            end
-            activate("Phrases & bindings");activate("Edit phrase")
+            HOST.Press("PADFORWARD");k:UsePhrase(1)
+            assert(k.composing and not k.input and box:HasFocus())
+            k:CustomMessage(true)
             assert(k.composing and k.inputBorder:IsShown() and k.input:HasFocus())
             assert(k.input.textInsets[1]==12 and k.input.textInsets[2]==12)
             k:Action("clear");k:Insert("/sample custom")
             assert(k.input:GetText()=="/sample custom" and box:GetText()=="kept" and #HOST.nativeEnters==0)
+            HOST.Press("PADRTRIGGER");assert(k.composing and not k.composing.typing)
             HOST.Press("PADRTRIGGER")
-            assert(not k.composing and not k.inputBorder:IsShown() and box:HasFocus())
+            assert(not k.composing and not k.inputBorder:IsShown() and box:HasFocus() and k.assigning)
             assert(W.Phrases.Resolve(k:Context(),1)=="/sample custom" and box:GetText()=="kept")
-            activate("Keyboard");assert(k.frame:GetHeight()==364)
+            HOST.Press("PADFORWARD");assert(not k.assigning and k.quickVisible)
         ''')
 
     def test_mouse_click_reclaims_only_its_existing_native_field(self):
         self.run_lua('''
             local k=W.Keyboard;local box=HOST.Field("SearchBox","hello");k:Open(box)
-            local key=k.rows[3][1]
+            local key=k.rows[2][1]
             box:ClearFocus();W.Input:Release();key:GetScript("OnMouseDown")(key)
             assert(box:HasFocus() and W.Input.active)
             -- Also tolerate native mouse dispatch clearing focus after down.
@@ -356,7 +346,8 @@ class AddonTests(unittest.TestCase):
     def test_raw_button_callbacks_clear_undo_nintendo_and_pairing(self):
         self.run_lua('''
             local box=HOST.Field("SearchBox","hello");W.Keyboard:Open(box)
-            HOST.Press("PADLSTICK");assert(W.Keyboard.editor.text=="")
+            HOST.Press("PADLSTICK");assert(W.Keyboard.symbols and W.Keyboard.editor.text=="hello")
+            W.Keyboard:Action("clear");assert(W.Keyboard.editor.text=="")
             W.Keyboard:Action("undo");assert(W.Keyboard.editor.text=="hello")
             local f=W.Keyboard.frame
             f:GetScript("OnGamePadButtonUp")(f,"PAD3");assert(W.Keyboard.editor.text=="hello")
@@ -416,23 +407,15 @@ class AddonTests(unittest.TestCase):
     def test_controller_library_can_unbind_resolve_conflict_and_edit_scope(self):
         self.run_lua('''
             local box=HOST.Field("ChatFrame1EditBox","");box:SetAttribute("chatType","PARTY");W.Keyboard:Open(box)
-            local k=W.Keyboard;k.view="phrases";k:Draw()
-            local function activate(label)
-                for r,row in ipairs(k.rows)do for c,b in ipairs(row)do
-                    if b:GetText():find(label,1,true) then k:Select(r,c);HOST.Press(W.Input.keys.primary);return end
-                end end
-                error("Control not reachable: "..label)
-            end
-            activate("Shortcut:");activate("Unbound")
-            assert(W.db.bindings["chat:PARTY"][1]=="unbound")
-            k.slot=2;k:Draw();activate("Shortcut:")
-            for r,row in ipairs(k.rows)do for c,b in ipairs(row)do
-                if b.basePrompt[2]=="primary" then k:Select(r,c);HOST.Press(W.Input.keys.primary) end
-            end end
+            local k=W.Keyboard;k:ToggleAssign();k:UsePhrase(1);k:CycleQuickBinding()
+            assert(k.composing.binding=="unbound" and not W.db.bindings["chat:PARTY"])
+            k:Action("confirm");assert(W.db.bindings["chat:PARTY"][1]=="unbound")
+            k:UsePhrase(2);k:CycleQuickBinding();k:CycleQuickBinding()
+            assert(k.composing.binding=="primary");k:Action("confirm")
             assert(W.db.bindings["chat:PARTY"][2]=="primary")
-            k.scopeIndex=3;k:Draw();activate("Shortcut:");activate("Unbound")
-            assert(W.db.bindings.global[2]=="unbound")
-            assert(W.db.bindings.global[1]=="primary")
+            k:UsePhrase(2);k:CycleQuickScope();k:CycleQuickScope()
+            assert(k.composing.scope=="global");k:CycleQuickBinding();k:Action("confirm")
+            assert(W.db.bindings.global[2]=="unbound" and W.db.bindings.global[1]=="primary")
         ''')
 
     def test_native_controller_images_without_duplicate_draft(self):
@@ -444,10 +427,10 @@ class AddonTests(unittest.TestCase):
                 {"Reverse","gamepad-switch-128x-face-a-normal"}})do
                 W.db.style="Auto";HOST.pad.labelStyle=case[1];W.Input:Refresh();k:Draw()
                 assert(W.Input:Icon("primary")==case[2])
-                k:Select(3,1)
+                k:Select(2,1)
                 assert(k.focused.prompt.icons[1].atlas==case[2])
-                local phrase=k.rows[2][1]
-                assert(phrase.prompt.icons[1].shown and phrase.prompt.icons[2].shown)
+                local phrase=k.quickButtons[1]
+                assert(phrase.prompt.icons[1].shown and k.quickBankButtons[2]:IsShown() and k.quickBankButtons[2].prompt.icons[1].shown)
                 assert(not phrase:GetText():find("[",1,true))
             end
             W.db.actionBindings={primary="PAD3"};W.Input:Refresh();k:Draw()
@@ -457,13 +440,13 @@ class AddonTests(unittest.TestCase):
     def test_chat_drafts_send_only_explicit_channel_identity(self):
         self.run_lua('''
             local box=HOST.Field("ChatFrame1EditBox","");box:SetAttribute("chatType","CHANNEL");box:SetAttribute("channelTarget",2)
-            W.Keyboard:Open(box);W.Keyboard:InsertPhrase(1);assert(#HOST.sent==0)
+            W.Keyboard:Open(box);W.Keyboard:InsertPhrase(1);assert(#HOST.sent==1 and HOST.sent[1][4]=="2")
             W.Keyboard:Action("clear");W.Keyboard.editor:Replace("hello");W.Keyboard:Action("confirm")
-            assert(#HOST.sent==1 and HOST.sent[1][2]=="CHANNEL" and HOST.sent[1][4]=="2")
+            assert(#HOST.sent==2 and HOST.sent[2][1]=="hello" and HOST.sent[2][2]=="CHANNEL" and HOST.sent[2][4]=="2")
             assert(box:GetText()=="")
             box:Show();W.Keyboard:Open(box);W.Keyboard:Insert("draft");W.Keyboard:Action("back");W.Keyboard:Open(box)
             assert(W.Keyboard.editor.text=="draft")
-            HOST.tradeID=7;W.Keyboard:Action("confirm");assert(#HOST.sent==1)
+            HOST.tradeID=7;W.Keyboard:Action("confirm");assert(#HOST.sent==2)
         ''')
 
     def test_stale_field_and_callback_do_not_commit(self):
@@ -495,7 +478,7 @@ class AddonTests(unittest.TestCase):
             W.Keyboard.remapping=nil
             local box=HOST.Field("Recycled","old");W.Keyboard:Open(box)
             box:SetParent(UIParent);W.Keyboard:Action("confirm");assert(not W.Keyboard.session)
-            UIParent:SetSize(640,480);W.db.scale=1.5;W.db.largeKeys=true;W.Keyboard:Options()
+            UIParent:SetSize(640,480);W.db.scale=1.5;W.db.largeKeys=true;W.Keyboard:ShowQuickMessages()
             assert(W.Keyboard.frame:GetWidth()*W.Keyboard.frame:GetScale()<=608)
         ''')
 
@@ -506,7 +489,7 @@ class AddonTests(unittest.TestCase):
             f:GetScript("OnGamePadButtonDown")(f,"PADLTRIGGER")
             f:GetScript("OnGamePadButtonDown")(f,"PAD1")
             f:GetScript("OnGamePadButtonUp")(f,"PADLTRIGGER")
-            f:GetScript("OnGamePadButtonUp")(f,"PAD1");assert(W.Keyboard.editor.text=="Ready!")
+            f:GetScript("OnGamePadButtonUp")(f,"PAD1");assert(W.Keyboard.editor.text=="" and HOST.sent[1][1]=="Ready!")
             local number=HOST.Field("Amount","3",true);number.GetMinValue=function()return 1 end;number.GetMaxValue=function()return 9 end
             W.Keyboard:Close();W.Keyboard:Open(number);W.Input.waitNeutral=false;HOST.keys.PADDUP=true
             f:GetScript("OnGamePadButtonDown")(f,"PADDUP");assert(W.Keyboard.editor.text=="4")
