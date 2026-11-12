@@ -120,7 +120,7 @@ function O.Init()
     dropdown("style", W.db, "Button icons", "Xbox", { {"Xbox","Xbox"}, {"PlayStation","PlayStation"}, {"Nintendo","Nintendo"}, {"Auto","Auto"} })
     dropdown("activation", W.db, "Keyboard activation", "controller", { {"controller","Controller"}, {"always","Always"} })
     dropdown("behavior", W.db.radial, "Healing wheel behavior", "sweep", {
-        {"sweep","Hold & sweep"}, {"classic","Classic"},
+        {"sweep","Hold & sweep"}, {"classic","Classic"}, {"target","Target only"},
     })
     dropdown("afterAction", W.db.radial, "After wheel action", "members", {
         {"members","Return to member selection"}, {"target","Reopen on selected member"}, {"close","Close after selection"},

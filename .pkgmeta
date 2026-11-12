@@ -1,0 +1,10 @@
+package-as: WoWEnhancedController
+enable-nolib-creation: no
+move-folders:
+  WoWEnhancedController/WoWEnhancedController: WoWEnhancedController
+ignore:
+  - README.md
+  - branding
+  - localization
+  - tests
+  - tools

@@ -46,6 +46,49 @@ function R:PaintAuras(row, parent, x, y, auras)
     row.more:SetText(#auras > count and W.L.Format("+%d", #auras - count) or "")
     row.more:SetShown(#auras > count)
 end
+local function listenForWheelAim(wheel, radial)
+    local observer = CreateFrame("Frame", nil, wheel)
+    local camera = CreateFrame("Frame", nil, wheel)
+    observer:SetFrameStrata("BACKGROUND")
+    observer:SetPropagateKeyboardInput(true)
+    camera:SetFrameStrata("TOOLTIP")
+    camera:SetPropagateKeyboardInput(false)
+    camera:Hide()
+
+    -- WoW sends the physical Left/Right samples before their mapped
+    -- Movement/Camera samples. Let Movement reach the game before consuming
+    -- Camera, including when both sticks move in the same input frame.
+    local leftPending, rightPending
+    observer:SetScript("OnGamepadStick", function(_, stick)
+        if stick == "Left" then
+            leftPending = true
+        elseif stick == "Right" then
+            rightPending = true
+            if not leftPending then camera:Show() end
+        elseif stick == "Movement" then
+            leftPending = false
+            if rightPending then camera:Show() end
+        end
+        return stick ~= "Camera"
+    end)
+    camera:SetScript("OnGamepadStick", function(_, stick)
+        if stick ~= "Camera" then return true end
+        rightPending = false
+        camera:Hide()
+        return false
+    end)
+    local function resetSamples()
+        leftPending, rightPending = false, false
+        if camera:IsShown() then camera:Hide() end
+    end
+    observer:SetScript("OnUpdate", function()
+        resetSamples()
+        radial:PollStick()
+    end)
+    observer:SetScript("OnHide", resetSamples)
+    observer:EnableGamePadStick(true)
+    camera:EnableGamePadStick(true)
+end
 function R:Init()
     W.RadialData.Init()
     if W.Combat() then self.pendingInit = true; return end
@@ -57,13 +100,7 @@ function R:Init()
     local frame = CreateFrame("Frame", "WoWEnhancedControllerWheel", UIParent, "SecureHandlerStateTemplate")
     self.frame = frame
     frame:Hide(); frame:SetFrameStrata("DIALOG"); frame:EnableMouse(false)
-    -- Like Forever's SoftCursor, consume Camera and pass every other stick on.
-    -- This child follows the secure wheel's visibility even during lockdown.
-    local stickListener = CreateFrame("Frame", nil, frame)
-    stickListener:SetScript("OnGamepadStick", function(_, stick, x, y)
-        return self:StickInput(stick, x, y)
-    end)
-    stickListener:EnableGamePadStick(true)
+    listenForWheelAim(frame, self)
     W.Placement.Register("radial", frame, W.L["Party / raid wheel"], { anchor = "center", x = 0, y = 0 })
     for key, body in pairs(W.RadialSecure) do if type(body) == "string" then frame:SetAttribute("op-" .. key, body) end end
     frame:SetAttribute("_onstate-availability", [[
@@ -119,15 +156,13 @@ function R:Init()
     dispatch:SetSize(1, 1); dispatch:SetPoint("TOPLEFT"); dispatch:SetAlpha(0); dispatch:EnableMouse(false)
     self.dispatch = dispatch; frame:SetFrameRef("dispatch", dispatch)
     W.RadialSecure.Attach(dispatch, frame)
-    local macroToggle = CreateFrame("Button", "WoWEnhancedControllerWheelToggle", UIParent, "SecureActionButtonTemplate")
-    macroToggle:SetSize(1, 1); macroToggle:SetPoint("TOPLEFT"); macroToggle:SetAlpha(0); macroToggle:EnableMouse(false)
-    macroToggle:SetAttribute("command", "ToggleMacro")
-    W.RadialSecure.Attach(macroToggle, frame)
-    self.macroToggle = macroToggle
-    for _, mode in ipairs({"Classic", "Sweep"}) do
+    for _, mode in ipairs({"Toggle", "Classic", "Sweep", "Target"}) do
         local opener = CreateFrame("Button", "WoWEnhancedControllerWheel" .. mode, UIParent, "SecureActionButtonTemplate")
         opener:SetSize(1, 1); opener:SetPoint("TOPLEFT"); opener:SetAlpha(0); opener:EnableMouse(false)
-        opener:SetAttribute("command", mode .. "Macro")
+        opener:SetAttribute("command", mode)
+        opener:SetAttribute("macro-opener", true)
+        if mode == "Toggle" then self.macroToggle = opener
+        else frame:SetAttribute("open-mode-" .. mode, mode:lower()) end
         W.RadialSecure.Attach(opener, frame)
     end
     self:CreateSweep(frame)
@@ -210,6 +245,7 @@ function R:Rebuild()
     end
     local s = self.snapshot
     f:SetAttribute("raid", s.raid); f:SetAttribute("member-count", #s.members)
+    f:SetAttribute("solo", not IsInGroup() and not s.raid and #s.members == 1 and s.members[1].unit == "player")
     f:SetAttribute("action-count", math.min(#self.actions, D.maxActions))
     f:SetAttribute("enabled", W.db.enabled and W.db.radial.enabled)
     f:SetAttribute("after-action", W.db.radial.afterAction)
@@ -445,6 +481,7 @@ function R:GestureStage()
         .. ":" .. (f:GetAttribute("member") or 0) .. ":" .. (f:GetAttribute("page") or 1)
 end
 function R:ResetGesture(wait)
+    self.polledX, self.polledY = nil, nil
     self.gestureArmed = nil; self.gestureWait = true; self.gestureMessage = nil
     if not self.frame then return end
     self.gestureStage = self:GestureStage()
@@ -452,6 +489,17 @@ function R:ResetGesture(wait)
     local state = W.Input:Device()
     local stick = state and state.sticks and state.sticks[self.frame:GetAttribute("camera-index") or 2]
     if stick and not W.Secret(stick.len) and type(stick.len) == "number" then self.gestureWait = stick.len >= 0.2 end
+end
+function R:PollStick()
+    local state = W.Input:Device()
+    local stick = state and state.sticks and state.sticks[self.frame:GetAttribute("camera-index") or 2]
+    if not stick or W.Secret(stick) then return end
+    local x, y = stick.x, stick.y
+    if not W.Secret(x) and not W.Secret(y) then
+        if x == self.polledX and y == self.polledY then return end
+        self.polledX, self.polledY = x, y
+    end
+    self:StickInput("Camera", x, y)
 end
 function R:StickInput(stick, x, y)
     if stick ~= "Camera" then return true end
@@ -551,7 +599,7 @@ function R:Paint()
     -- The wheel owns its Back binding independently of keyboard remaps.
     prompt(self.backGlyph,"Back");prompt(self.backDpadGlyph,"BackDpad")
     self.backSeparator:SetShown(self.backGlyph:IsShown() and self.backDpadGlyph:IsShown())
-    self.backLabel:SetText(stage=="root" and W.L["Close"] or W.L["Back"])
+    self.backLabel:SetText((stage=="root" or f:GetAttribute("solo")) and W.L["Close"] or W.L["Back"])
     prompt(self.raidGlyph,"RaidGroups");prompt(self.membersGlyph,"RaidMembers")
     for _,region in ipairs({self.raidLabel,self.membersLabel})do region:SetShown(self.snapshot.raid)end
     if not self.snapshot.raid then self.raidGlyph:Hide();self.membersGlyph:Hide() end

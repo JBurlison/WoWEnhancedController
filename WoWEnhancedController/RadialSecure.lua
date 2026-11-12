@@ -21,12 +21,18 @@ S.invalidate = [[
 ]]
 S.stage = [[
     local stage, group, member, page = ...
+    local targetOnly = self:GetAttribute("mode") == "target"
+    if stage == "root" and self:GetAttribute("solo") and not targetOnly then
+        stage, group, member = "spells", 1, 1
+    end
     self:RunAttribute("op-clearAim", true)
     self:SetAttribute("stage", stage)
     self:SetAttribute("group", group or 1)
     self:SetAttribute("member", member)
     self:SetAttribute("page", page or 0)
-    self:SetAttribute("selected", 0)
+    -- A launcher or addon slash command opens the UI without an action click.
+    -- Leave self selected so its first real confirm can target the player.
+    self:SetAttribute("selected", targetOnly and self:GetAttribute("solo") and 1 or 0)
     self:SetAttribute("pressed", nil)
     self:SetAttribute("sweep-button", nil)
     local dual = self:GetAttribute("mode") == "sweep" and (stage ~= "root" or not self:GetAttribute("raid"))
@@ -63,7 +69,8 @@ S.finish = [[
     self:SetAttribute("finish-member", nil)
     if not self:GetAttribute("open") then return end
     if not self:GetAttribute("enabled") or not self:GetAttribute("roster-valid")
-        or self:GetAttribute("state-availability") == "blocked" or self:GetAttribute("after-action") == "close" then
+        or self:GetAttribute("state-availability") == "blocked" or self:GetAttribute("after-action") == "close"
+        or self:GetAttribute("mode") == "target" then
         self:RunAttribute("op-close"); return
     end
     local unit = member and self:GetAttribute("unit-" .. member)
@@ -85,17 +92,29 @@ S.bind = [[
         self:SetBindingClick(true, prefix .. key, name, command)
     end
 ]]
+S.target = [[
+    local ref, button, unit = ...
+    if not unit or not UnitExists(unit) then return false end
+    local clicked = self:GetFrameRef(ref)
+    clicked:SetAttribute("unit", unit)
+    clicked:SetAttribute("type", "target")
+    return button, "finished"
+]]
 S.open = [[
-    local request = ...
+    local button, ref = ...
+    local request = button and self:GetAttribute("open-mode-" .. button)
     local mode = request or self:GetAttribute("default-mode")
-    if not self:GetAttribute("enabled") or not self:GetAttribute("roster-valid") then return end
-    if self:GetAttribute("state-availability") == "blocked" then return end
+    if not self:GetAttribute("enabled") or not self:GetAttribute("roster-valid") then return false end
+    if self:GetAttribute("state-availability") == "blocked" then return false end
     if self:GetAttribute("open") then
         local toggle = not request or self:GetAttribute("mode") == mode
         self:RunAttribute("op-close")
-        if toggle then return end
+        if toggle then return false end
     end
     self:SetAttribute("mode", mode)
+    if mode == "target" and self:GetAttribute("solo") and ref then
+        return self:RunAttribute("op-target", ref, button, "player")
+    end
     self:SetAttribute("open", true)
     self:Show()
     self:RunAttribute("op-stage", "root")
@@ -109,6 +128,7 @@ S.open = [[
     for key in gmatch("PADRSTICKUP PADRSTICKRIGHT PADRSTICKDOWN PADRSTICKLEFT", "%S+") do
         self:RunAttribute("op-bind", key, key)
     end
+    return false
 ]]
 S.point = [[
     local state = GetGamePadState()
@@ -183,7 +203,8 @@ S.mousePoint = [[
 ]]
 S.cancelSweep = [[
     local group = self:GetAttribute("group")
-    self:RunAttribute("op-stage", self:GetAttribute("raid") and "members" or "root", group)
+    local page = self:GetAttribute("solo") and self:GetAttribute("page") or nil
+    self:RunAttribute("op-stage", self:GetAttribute("raid") and "members" or "root", group, nil, page)
 ]]
 S.sweepClick = [[
     local ref, button, down = ...
@@ -244,11 +265,10 @@ S.click = [[
     clicked:SetAttribute("macrotext", nil)
     clicked:SetAttribute("unit", nil)
     local index = clicked:GetAttribute("index")
-    -- A native /click macro delivers one secure click, not a binding pair.
-    -- This dedicated entry can only toggle the menu, never select an action.
-    if button == "ToggleMacro" or button == "ClassicMacro" or button == "SweepMacro" then
-        if not down then self:RunAttribute("op-open", button=="ClassicMacro" and "classic" or button=="SweepMacro" and "sweep" or nil) end
-        return false
+    -- A native /click macro delivers one secure click, without a binding pair.
+    if clicked:GetAttribute("macro-opener") then
+        if down then return false end
+        return self:RunAttribute("op-open", button, clickedRef)
     end
     local dual = self:GetAttribute("open") and self:GetAttribute("dual")
     local sweep = self:GetAttribute("sweep-button")
@@ -262,7 +282,7 @@ S.click = [[
     end
     if button == "SweepMouse" then return false end
     if sweep and down and (button == "Back" or button == "BackDpad" or button == "Cancel") then
-        if button=="Cancel" then self:RunAttribute("op-close") else self:RunAttribute("op-cancelSweep") end
+        if button=="Cancel" or self:GetAttribute("solo") then self:RunAttribute("op-close") else self:RunAttribute("op-cancelSweep") end
         return false
     end
     if sweep and (index or button=="Confirm" or button=="ConfirmDpad") then return false end
@@ -288,9 +308,8 @@ S.click = [[
     -- Separate command names prevent LT and D-pad releases from pairing.
     if pressed ~= ((index and "Cell" .. index) or input) then return false end
     self:SetAttribute("pressed", nil)
-    if button == "Toggle" or button == "Classic" or button == "Sweep" then
-        self:RunAttribute("op-open", button=="Classic" and "classic" or button=="Sweep" and "sweep" or nil)
-        return false
+    if button == "Toggle" or self:GetAttribute("open-mode-" .. button) then
+        return self:RunAttribute("op-open", button, clickedRef)
     end
     if not self:GetAttribute("open") then return false end
     if button == "Cancel" then self:RunAttribute("op-close"); return false end
@@ -301,7 +320,8 @@ S.click = [[
     if stage ~= self:GetAttribute("press-stage") or member ~= self:GetAttribute("press-member")
         or page ~= self:GetAttribute("press-page") then return false end
     if button == "Back" or button == "BackDpad" then
-        if stage == "spells" then self:RunAttribute("op-stage", self:GetAttribute("raid") and "members" or "root", group)
+        if self:GetAttribute("solo") then self:RunAttribute("op-close")
+        elseif stage == "spells" then self:RunAttribute("op-stage", self:GetAttribute("raid") and "members" or "root", group)
         elseif stage == "members" then self:RunAttribute("op-stage", "root", group)
         else self:RunAttribute("op-close") end
         return false
@@ -350,15 +370,17 @@ S.choose = [[
     local group = self:GetAttribute("group")
     local member = self:GetAttribute("member")
     local page = self:GetAttribute("page") or 0
-    if stage == "root" then
-        if self:GetAttribute("raid") then
-            if (self:GetAttribute("group-count-" .. index) or 0) == 0 then return false end
-            self:RunAttribute("op-stage", "members", index)
-        else self:RunAttribute("op-stage", "spells", 1, index) end
+    if stage == "root" and self:GetAttribute("raid") then
+        if (self:GetAttribute("group-count-" .. index) or 0) == 0 then return false end
+        self:RunAttribute("op-stage", "members", index)
         return false
-    elseif stage == "members" then
-        member = self:GetAttribute("group-" .. group .. "-" .. index)
-        if member then self:RunAttribute("op-stage", "spells", group, member) end
+    elseif stage == "root" or stage == "members" then
+        member = stage == "root" and index or self:GetAttribute("group-" .. group .. "-" .. index)
+        if not member then return false end
+        if self:GetAttribute("mode") == "target" then
+            return self:RunAttribute("op-target", clickedRef, button, self:GetAttribute("unit-" .. member))
+        end
+        self:RunAttribute("op-stage", "spells", group, member)
         return false
     end
     local unit = member and self:GetAttribute("unit-" .. member)

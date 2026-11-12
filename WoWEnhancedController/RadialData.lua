@@ -151,7 +151,7 @@ function D.Init()
     if type(r.profiles) ~= "table" then r.profiles = {} end
     if r.enabled == nil then r.enabled = true end
     if r.defaultR3 == nil then r.defaultR3 = true end
-    if r.behavior ~= "classic" then r.behavior = "sweep" end
+    if r.behavior ~= "classic" and r.behavior ~= "target" then r.behavior = "sweep" end
     if type(r.controls)~="table" then r.controls=nil end
     if r.afterAction ~= "members" and r.afterAction ~= "target" and r.afterAction ~= "close" then r.afterAction = "members" end
     r.size = W.Clamp(tonumber(r.size) or 480, 380, 520)

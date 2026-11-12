@@ -5,7 +5,8 @@ W.ControlBindings = B
 local wheelInput = "CLICK WoWEnhancedControllerWheelInput:"
 B.general = {
     {wheelInput.."Toggle","Toggle party / raid spell wheel"}, {wheelInput.."Sweep","Open hold & sweep healing wheel"},
-    {wheelInput.."Classic","Open classic healing wheel"}, {"WEC_OPEN","Open controller keyboard / options"},
+    {wheelInput.."Classic","Open classic healing wheel"}, {wheelInput.."Target","Open targeting wheel"},
+    {"WEC_OPEN","Open controller keyboard / options"},
     {"WEC_FOCUS","Focus controller keyboard"}, {"WEC_MENU","Open Enhanced Controller launcher"},
     {"WEC_MINIMAP","Navigate minimap buttons"}, {"WEC_QUICK_MOVE","Bank / mail quick move"},
 }

@@ -17,6 +17,63 @@ class SweepTests(unittest.TestCase):
     def run_lua(self, source):
         self.env.run_lua(source)
 
+    def test_solo_target_from_binding_or_macro_immediately_selects_self(self):
+        self.run_lua('''
+            for i=1,4 do HOST.units["party"..i]=nil end
+            R:Rebuild()
+            HOST.settings.WEC_RADIAL_behavior:SetValue("target")
+            W.RadialData.Init()
+            assert(W.db.radial.behavior=="target")
+            HOST.combat=true
+            edge("Toggle",true)
+            assert(#HOST.actions==0 and not f:IsShown())
+            edge("Toggle",false);edge("Toggle",false)
+            assert(#HOST.actions==1 and HOST.actions[1].kind=="target" and UnitName("target")=="You")
+            assert(not f:IsShown() and not next(f.binds))
+            macro("Classic");assert(f:GetAttribute("stage")=="spells")
+            macro("Target");assert(not f:IsShown() and #HOST.actions==2 and HOST.actions[2].unit=="player")
+            macro("Toggle");assert(#HOST.actions==3 and not f:IsShown())
+            f:RunAttribute("op-invalidate");macro("Target");assert(#HOST.actions==3)
+            HOST.combat=false;R:Rebuild()
+            R:Open();assert(f:IsShown() and f:GetAttribute("selected")==1)
+            HOST.WheelPress("Confirm");assert(#HOST.actions==4 and not f:IsShown())
+            W.db.radial.enabled=false;R:SyncOwnership();macro("Target");assert(#HOST.actions==4)
+        ''')
+
+    def test_party_target_stick_release_selects_once_and_closes(self):
+        self.run_lua('''
+            HOST.combat=true;HOST.WheelPress("Target")
+            assert(f:GetAttribute("stage")=="root" and f:GetAttribute("count")==5)
+            assert(not R.sweepSurface:IsShown() and R.selectLabel:GetText()=="Target")
+            HOST.StickEdge("PADRSTICKRIGHT",true,1,0)
+            assert(#HOST.actions==0 and UnitName("target")=="Stoneguard")
+            HOST.StickEdge("PADRSTICKRIGHT",false,0,0)
+            edge("PADRSTICKRIGHT",false)
+            assert(#HOST.actions==1 and HOST.actions[1].kind=="target" and HOST.actions[1].unit=="party2")
+            assert(UnitName("target")=="Thorne" and not f:IsShown() and not next(f.binds))
+            macro("Target");HOST.WheelPress("Back");assert(#HOST.actions==1 and not f:IsShown())
+            macro("Target");HOST.units.party1=nil;HOST.WheelPress("LeftButton",2)
+            assert(#HOST.actions==1 and f:IsShown())
+            f:RunAttribute("op-invalidate");edge("Confirm",false)
+            assert(#HOST.actions==1 and W.db.radial.behavior=="sweep")
+        ''')
+
+    def test_raid_target_keeps_group_selection_and_back_then_targets_member(self):
+        self.run_lua('''
+            HOST.Raid()
+            for i=6,10 do HOST.units["raid"..i]=nil end
+            R:Rebuild();HOST.combat=true;macro("Target")
+            assert(f:GetAttribute("stage")=="root" and R.selectLabel:GetText()=="Select")
+            HOST.WheelPress("LeftButton",2);assert(f:GetAttribute("stage")=="root")
+            HOST.WheelPress("LeftButton",3)
+            assert(#HOST.actions==0 and f:GetAttribute("stage")=="members" and f:GetAttribute("count")==5)
+            HOST.WheelPress("BackDpad");assert(f:GetAttribute("stage")=="root" and #HOST.actions==0)
+            HOST.WheelPress("LeftButton",3)
+            HOST.WheelPress("LeftButton",4)
+            assert(#HOST.actions==1 and HOST.actions[1].kind=="target" and HOST.actions[1].unit=="raid14")
+            assert(UnitName("target")=="Member14" and not f:IsShown())
+        ''')
+
     def test_movement_during_trigger_hold_and_camera_handoff(self):
         self.run_lua('''
             assert(not f:IsGamePadStickEnabled() and not f:GetScript("OnGamepadStick"))
@@ -55,7 +112,9 @@ class SweepTests(unittest.TestCase):
         self.run_lua('''
             for i=1,4 do HOST.units["party"..i]=nil end
             R:Rebuild();macro("Sweep")
-            assert(f:GetAttribute("member-count")==1)
+            assert(f:GetAttribute("stage")=="spells" and f:GetAttribute("member")==1)
+            assert(not R.sweepLayer.inner:IsShown() and not R.sweepLayer.members[1]:IsShown())
+            assert(R.backLabel:GetText()=="Close" and #HOST.actions==0)
             for attempt=1,2 do
                 point(0,1);edge("ConfirmTrigger",true);R:Paint()
                 assert(R.highlight:IsShown() and R.title:GetText()=="Flash Heal","top highlight on hold")
@@ -70,7 +129,33 @@ class SweepTests(unittest.TestCase):
                 edge("ConfirmTrigger",false);edge("ConfirmTrigger",false)
                 assert(#HOST.actions==attempt and HOST.actions[attempt].spell==2061)
                 assert(HOST.actions[attempt].unit=="player" and UnitName("target")=="Stoneguard")
+                assert(f:GetAttribute("stage")=="spells" and f:GetAttribute("member")==1)
             end
+            edge("ConfirmTrigger",true);HOST.WheelPress("BackDpad");edge("ConfirmTrigger",false)
+            assert(not f:IsShown() and #HOST.actions==2)
+        ''')
+
+    def test_solo_classic_and_group_transitions(self):
+        self.run_lua('''
+            local ally=HOST.units.party1
+            for i=1,4 do HOST.units["party"..i]=nil end
+            R:Rebuild();HOST.combat=true;macro("Classic")
+            assert(f:GetAttribute("stage")=="spells" and #HOST.actions==0)
+            HOST.WheelPress("LeftButton",1)
+            assert(#HOST.actions==1 and HOST.actions[1].unit=="player" and UnitName("target")=="Stoneguard")
+            HOST.WheelPress("Back");assert(not f:IsShown() and not next(f.binds))
+            HOST.combat=false
+
+            -- A party can exist before the other units appear in the snapshot.
+            HOST.grouped=true;R:Rebuild();macro("Classic")
+            assert(f:GetAttribute("stage")=="root" and not f:GetAttribute("member"))
+            HOST.units.party1=ally;R:Rebuild();macro("Sweep")
+            assert(f:GetAttribute("stage")=="root" and R.sweepLayer.members[2]:IsShown())
+            HOST.Raid();macro("Classic");assert(f:GetAttribute("stage")=="root" and f:GetAttribute("count")==8)
+            HOST.raid=false;HOST.grouped=false;HOST.units.party1=nil;R:Rebuild()
+            HOST.settings.WEC_RADIAL_afterAction:SetValue("close")
+            macro("Classic");HOST.WheelPress("LeftButton",1)
+            assert(not f:IsShown() and #HOST.actions==2 and HOST.actions[2].unit=="player")
         ''')
 
     def test_stale_neutral_and_empty_releases(self):

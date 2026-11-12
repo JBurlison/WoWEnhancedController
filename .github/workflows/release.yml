@@ -1,0 +1,101 @@
+name: Addon release
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: addon-release-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Test and package addon
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      changed: ${{ steps.version.outputs.changed }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - name: Check release version
+        id: version
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: python tools/release-version.py "$BASE_SHA"
+      - name: Run addon tests
+        run: |
+          python -m pip install lupa==2.8
+          python -m unittest discover -s tests
+      - name: Build and validate the Forever ZIP
+        if: steps.version.outputs.changed == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          pwsh -NoProfile -File tools/package.ps1
+          python tools/validate-package.py
+          cd dist
+          zip="WoWEnhancedController-$VERSION-forever.zip"
+          sha256sum "$zip" > "$zip.sha256"
+      - name: Attach installable ZIP and checksum
+        if: steps.version.outputs.changed == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: Enhanced-Controller-${{ steps.version.outputs.version }}-Forever
+          path: |
+            dist/*.zip
+            dist/*.zip.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  publish:
+    name: Publish merged release
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.build.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: Enhanced-Controller-${{ needs.build.outputs.version }}-Forever
+          path: dist
+      - name: Push the CurseForge release tag and publish the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          cd dist
+          zip="WoWEnhancedController-$VERSION-forever.zip"
+          tag="v$VERSION"
+          sha256sum --check "$zip.sha256"
+
+          # A tag push triggers the CurseForge webhook. Never move an existing tag.
+          gh auth setup-git
+          git push origin "$GITHUB_SHA:refs/tags/$tag"
+          if draft=$(gh release view "$tag" --json isDraft --jq .isDraft); then
+            if [[ "$draft" == true ]]; then
+              gh release upload "$tag" "$zip" "$zip.sha256" --clobber
+              gh release edit "$tag" --draft=false
+            fi
+          else
+            gh release create "$tag" "$zip" "$zip.sha256" --verify-tag \
+              --title "Enhanced Controller $VERSION" --generate-notes
+          fi

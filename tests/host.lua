@@ -58,7 +58,7 @@ function methods:GetTop() return self:GetBottom()+self.height end
 function methods:GetScale() return self.scale end
 function methods:SetScale(s) self.scale=s end
 function methods:GetEffectiveScale() return self.scale*(self.parent and self.parent:GetEffectiveScale() or 1) end
-function methods:SetFrameStrata() end
+function methods:SetFrameStrata(strata) self.strata=strata end
 function methods:GetFrameLevel() return self.frameLevel or 1 end
 function methods:SetFrameLevel(level) self.frameLevel=level end
 function methods:SetMovable() end
