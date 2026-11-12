@@ -303,6 +303,41 @@ class RadialTests(unittest.TestCase):
             HOST.StickEdge("PADRSTICKUP",false,0,0);assert(#HOST.actions==1)
         ''')
 
+    def test_only_camera_is_consumed_when_stick_events_share_an_input_frame(self):
+        self.run_lua('''
+            local axis = HOST.NativeAxis
+            HOST.combat = true
+            HOST.pad.sticks = {{x=0,y=0,len=0},{x=0,y=0,len=0}}
+            for _, mode in ipairs({"Sweep", "Classic"}) do
+                HOST.WheelPress(mode)
+                assert(axis("Left", .6, .8))
+                assert(axis("Right", 1, 0))
+                assert(axis("Movement", .6, .8))
+                assert(not axis("Camera", 1, 0))
+                HOST.pad.sticks[2] = {x=1,y=0,len=1}
+                W.Radial:PollStick()
+                assert(W.Radial.gestureArmed)
+                assert(axis("Look", 0, .5))
+                assert(axis("Right", 0, 0))
+                assert(not axis("Camera", 0, 0))
+                HOST.pad.sticks[2] = {x=0,y=0,len=0}
+                W.Radial:PollStick()
+                assert(not W.Radial.gestureArmed and #HOST.actions == 0)
+                assert(axis("Left", 1, 0) and axis("Movement", 1, 0))
+                -- Missing mapped sample: never carry capture into another frame.
+                assert(axis("Right", .7, .7))
+                for _, child in ipairs(W.Radial.frame.children) do
+                    local update = child:GetScript("OnUpdate")
+                    if child:IsGamePadStickEnabled() and update then update(child, .016) end
+                end
+                assert(axis("Left", -1, 0) and axis("Movement", -1, 0))
+                assert(axis("Right", 0, 1))
+                W.Radial.frame:RunAttribute("op-invalidate")
+                assert(axis("Camera", 0, 1) and axis("Movement", -1, 0))
+                W.Radial.frame:SetAttribute("roster-valid", true)
+            end
+        ''')
+
     def test_combat_wheel_preserves_movement_during_right_stick_selection(self):
         self.run_lua('''
             local f=W.Radial.frame

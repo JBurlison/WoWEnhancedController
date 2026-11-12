@@ -32,7 +32,9 @@ In a party or raid, use the default **Hold & sweep** controls:
 
 1. Click the right stick to open the wheel. In a raid, choose a group first.
 2. Point the right stick at an ally and hold the left trigger to select them. The wheel shows health and debuffs you can dispel.
-3. While holding the trigger, point at a spell. Release to cast on that ally, or release over the center to cancel. You can keep moving with the left stick.
+3. While holding the trigger, point at a spell. Release to cast on that ally, or release over the center to cancel.
+
+You can keep moving with the left stick in either wheel mode. The right stick aims the wheel while it’s open and controls the camera again when it closes.
 
 Use the shoulder buttons to switch spell pages. If you prefer to confirm the ally and spell separately, choose **Classic** under **Healing wheel behavior** in settings. Open **Wheel spells / macros** to add learned spells or saved macros, arrange their slots, and save your layout.
 

@@ -23,6 +23,20 @@ function HOST.Axis(name,x,y)
     end
     return true
 end
+-- Model a client that uses the listening frame's propagation flag. Determine
+-- the recipient before dispatch: showing/hiding a frame affects the next event.
+function HOST.NativeAxis(name, x, y)
+    local receiver
+    for _, child in ipairs(W.Radial.frame.children) do
+        if child:IsVisible() and child:IsGamePadStickEnabled() then
+            if not receiver or child.strata == "TOOLTIP" then receiver = child end
+        end
+    end
+    if not receiver then return true end
+    local propagate = receiver.propagateKeyboard == true
+    receiver:GetScript("OnGamepadStick")(receiver, name, x, y)
+    return propagate
+end
 function UnitExists(unit) return unit and HOST.units[unit] ~= nil end
 function UnitName(unit) return unit and HOST.units[unit] and HOST.units[unit].name end
 function UnitGUID(unit) return UnitExists(unit) and "guid-"..UnitName(unit) end
