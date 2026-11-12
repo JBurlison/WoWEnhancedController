@@ -5,4 +5,16 @@
     <Binding name="WEC_FOCUS">
         WoWEnhancedController.FocusBinding()
     </Binding>
+    <Binding name="WEC_MENU">
+        WoWEnhancedController.Launcher:Toggle("launcher")
+    </Binding>
+    <Binding name="WEC_MINIMAP">
+        WoWEnhancedController.Launcher:Toggle("minimap")
+    </Binding>
+    <Binding name="WEC_QUICK_MOVE" runOnUp="true">
+        WoWEnhancedController.QuickMove:Binding(keystate)
+    </Binding>
+    <Binding name="CLICK WoWEnhancedControllerWheelInput:Toggle" />
+    <Binding name="CLICK WoWEnhancedControllerWheelInput:Classic" />
+    <Binding name="CLICK WoWEnhancedControllerWheelInput:Sweep" />
 </Bindings>

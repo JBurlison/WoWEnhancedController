@@ -1,6 +1,6 @@
 local addonName, W = ...
 _G.WoWEnhancedController = W
-W.name, W.version = addonName, "0.1.0"
+W.name, W.version = addonName, "0.19.0"
 W.frames, W.adapters, W.drafts = {}, {}, {}
 
 function W.Secret(value)
@@ -29,8 +29,12 @@ function W.InitDB()
     if type(WoWEnhancedControllerDB) ~= "table" then WoWEnhancedControllerDB = {} end
     W.db = WoWEnhancedControllerDB
     local defaults = { enabled = true, activation = "controller", style = "Xbox", swapNintendo = true,
-        scale = 1, fontSize = 14, largeKeys = false, phrases = {}, bindings = {}, placements = {}, schema = 1 }
+        scale = 1, fontSize = 14, largeKeys = false, quickMove = true, phrases = {}, bindings = {}, phraseBanks = {}, placements = {}, schema = 1 }
     for key, value in pairs(defaults) do if W.db[key] == nil then W.db[key] = W.Copy(value) end end
+    if type(W.db.quickMove) ~= "boolean" then W.db.quickMove = true end
+    if type(W.db.textKeys)~="table" then W.db.textKeys=nil end
+    if type(W.db.minimapVisible) ~= "boolean" then W.db.minimapVisible = true end
+    W.db.minimapAngle = tonumber(W.db.minimapAngle) or 225
     W.db.fontSize = math.floor(W.Clamp(tonumber(W.db.fontSize) or 14, 12, 20))
     if (W.db.schema or 1) < 2 then
         local bindings = W.db.actionBindings
@@ -54,6 +58,17 @@ function W.InitDB()
         if bindings and bindings.symbols == "PADRSTICK" then bindings.symbols = nil end
         W.db.schema = 5
     end
+    if W.db.schema < 6 then
+        local bindings = W.db.actionBindings
+        if bindings then
+            if bindings.left == "PADLSHOULDER" then bindings.left = nil end
+            if bindings.right == "PADRSHOULDER" then bindings.right = nil end
+            if bindings.clear == "PADLSTICK" then bindings.clear = nil end
+            if bindings.symbols == "" then bindings.symbols = nil end
+        end
+        W.db.schema = 6
+    end
+    W.Theme.NormalizeAppearance()
 end
 
 function W.ControllerMode()
@@ -68,7 +83,7 @@ end
 function W.OtherKeyboard()
     -- Do not disable or manipulate another addon. Avoid two simultaneous keyboards.
     if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("CompactKeyboard") then
-        return "CompactKeyboard is loaded. Disable one keyboard in the AddOns list, then reload."
+        return W.L["CompactKeyboard is loaded. Disable one keyboard in the AddOns list, then reload."]
     end
 end
 

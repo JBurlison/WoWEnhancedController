@@ -2,8 +2,8 @@ local _, W = ...
 local C = {}
 W.Contexts = C
 
-local labels = { SAY = "Say", YELL = "Yell", PARTY = "Party", RAID = "Raid", RAID_WARNING = "Raid warning",
-    INSTANCE_CHAT = "Instance", GUILD = "Guild", OFFICER = "Officer", WHISPER = "Whisper", BN_WHISPER = "Battle.net whisper", EMOTE = "Emote" }
+local labels = { SAY = W.L["Say"], YELL = W.L["Yell"], PARTY = W.L["Party"], RAID = W.L["Raid"], RAID_WARNING = W.L["Raid warning"],
+    INSTANCE_CHAT = W.L["Instance"], GUILD = W.L["Guild"], OFFICER = W.L["Officer"], WHISPER = W.L["Whisper"], BN_WHISPER = W.L["Battle.net whisper"], EMOTE = W.L["Emote"] }
 -- Leave Auction House count controls to the native UI. QuantityInput wrappers
 -- commonly have only a parentKey, so inspecting global EditBox names is not enough.
 function C.NativeAuctionQuantity(box)
@@ -27,7 +27,7 @@ function C.Chat(box)
     if not kind then return end
     local result = { chat = true, chatType = kind, key = "chat:" .. kind, label = labels[kind] or kind, maxBytes = 255 }
     if kind == "CHANNEL" then
-        local target = W.Call(box, "GetAttribute", "channelTarget")
+        local target = W.Call(box, "GetChannelTarget") or W.Call(box, "GetAttribute", "channelTarget")
         if GetChannelName and target then
             local ok, id, name = pcall(GetChannelName, target)
             if ok and not W.Secret(id) and not W.Secret(name) and id and id > 0 and type(name) == "string" then
@@ -35,12 +35,30 @@ function C.Chat(box)
                 result.key, result.label = "chat:channel:" .. name:lower(), name
             end
         end
-        if not result.channel then result.unavailable = "This chat channel is no longer joined." end
+        if not result.channel then result.unavailable = W.L["This chat channel is no longer joined."] end
     elseif kind == "WHISPER" or kind == "BN_WHISPER" then
         result.recipient = W.Call(box, "GetTellTarget") or W.Call(box, "GetAttribute", "tellTarget")
-        result.label = result.label .. " to " .. (result.recipient or "no recipient")
+        result.label = W.L.Format("%s to %s", result.label, result.recipient or W.L["no recipient"])
     end
     return result
+end
+
+-- Persist a channel's name. The same number can belong to a different
+-- channel after leaving, rejoining, or moving to another zone.
+function C.Destination(pin)
+    if type(pin) ~= "table" or (not labels[pin.chatType] and pin.chatType ~= "CHANNEL") then return end
+    if pin.chatType == "CHANNEL" and type(pin.channelName) ~= "string" then return end
+    local context = C.Chat({
+        GetChatType = function() return pin.chatType end,
+        GetChannelTarget = function() return pin.channelName end,
+        GetTellTarget = function() return pin.recipient end,
+    })
+    if pin.chatType == "CHANNEL" and (not context.channelName or context.channelName:lower() ~= pin.channelName:lower()) then return end
+    return context
+end
+
+function C.DraftKey(context)
+    return context.recipient and context.key.." "..context.recipient or context.key
 end
 
 function C.Describe(box)
@@ -68,16 +86,16 @@ function C.Describe(box)
         node = parent
     end
     local path, name = table.concat(names, "/"), W.Call(box, "GetName")
-    local c = { key = "field:" .. (name or path), label = name or "Text field",
+    local c = { key = "field:" .. (name or path), label = W.L["Text field"],
         numeric = W.Call(box, "IsNumeric") == true, maxBytes = W.Call(box, "GetMaxBytes"),
         maxLetters = W.Call(box, "GetMaxLetters"), multiline = W.Call(box, "IsMultiLine") == true }
     if path:find("AuctionHouse") and (path:find("Search") or path:find("search")) then
-        c.key, c.label = "auction:search", "Auction House search"
+        c.key, c.label = "auction:search", W.L["Auction House search"]
     elseif path:find("SendMail") then
-        c.key, c.label = "mail:" .. (name or "body"), "Mail · " .. (name or "Body")
+        c.key, c.label = "mail:" .. (name or "body"), W.L.Format("Mail · %s", name or W.L["Body"])
     elseif path:find("Professions") or path:find("TradeSkill") then
-        c.key, c.label = c.numeric and "craft:quantity" or "craft:search", c.numeric and "Crafting quantity" or "Profession search"
-    elseif c.numeric then c.label = "Amount" end
+        c.key, c.label = c.numeric and "craft:quantity" or "craft:search", c.numeric and W.L["Crafting quantity"] or W.L["Profession search"]
+    elseif c.numeric then c.label = W.L["Amount"] end
     if c.numeric then
         c.min, c.step = 0, 1
         -- Unknown bounds remain unknown. Known native spinner limits are supplied below.

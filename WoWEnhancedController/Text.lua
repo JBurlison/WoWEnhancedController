@@ -108,8 +108,8 @@ function Text:Validate()
     local o = self.options
     if not o.numeric then return true end
     local n = tonumber(self.text)
-    if not n or (not o.decimal and n % 1 ~= 0) then return false, "Enter a valid number." end
-    if o.min and n < o.min then return false, "Minimum: " .. o.min end
-    if o.max and n > o.max then return false, "Maximum: " .. o.max end
+    if not n or (not o.decimal and n % 1 ~= 0) then return false, W.L["Enter a valid number."] end
+    if o.min and n < o.min then return false, W.L.Format("Minimum: %s", o.min) end
+    if o.max and n > o.max then return false, W.L.Format("Maximum: %s", o.max) end
     return true
 end

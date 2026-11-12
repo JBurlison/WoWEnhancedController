@@ -35,11 +35,14 @@ function T.Shell(frame)
     frame.border = border
     return border
 end
-function T.Button(parent, text, callback)
-    local button = CreateFrame("Button", nil, parent)
-    button:SetNormalTexture("Interface\\Common\\dark-goldframe-button")
-    button:SetPushedTexture("Interface\\Common\\dark-goldframe-button-pressed")
-    button:SetHighlightTexture("Interface\\Buttons\\UI-Silver-Button-Highlight", "ADD")
+function T.Button(parent, text, callback, native)
+    local button = CreateFrame("Button", nil, parent, native and "UIPanelButtonTemplate" or nil)
+    if not native then
+        button:SetNormalTexture("Interface\\Common\\dark-goldframe-button")
+        button:SetPushedTexture("Interface\\Common\\dark-goldframe-button-pressed")
+        button:SetHighlightTexture("Interface\\Buttons\\UI-Silver-Button-Highlight", "ADD")
+    end
+    if not button:GetFontString() then button:SetFontString(T.Label(button, text)) end
     T.ButtonFonts(button)
     button:SetText(text or "")
     button:SetScript("OnClick", function(self)
@@ -58,14 +61,21 @@ function T.Button(parent, text, callback)
     button.focus:SetColorTexture(1, 0.75, 0.15, 0.25)
     button.focus:SetBlendMode("ADD")
     button.focus:Hide()
-    button:SetScript("OnEnter", function(self)
+    local addScript = native and button.HookScript or button.SetScript
+    addScript(button, "OnEnter", function(self)
         if W.Keyboard and self.row then W.Keyboard:Select(self.row, self.col) end
     end)
-    button:SetScript("OnDisable", function(self) self:SetAlpha(0.45) end)
-    button:SetScript("OnEnable", function(self) self:SetAlpha(1) end)
+    addScript(button, "OnDisable", function(self) self:SetAlpha(0.45) end)
+    addScript(button, "OnEnable", function(self) self:SetAlpha(1) end)
     return button
 end
-function T.Tab(button, selected)
+function T.SettingsButton(parent, text, callback)
+    return T.Button(parent, text, callback, true)
+end
+function T.Tab(button, selected, keyboard)
+    if keyboard then
+        T.KeyboardButton(button, nil, selected); button.tabSelected = selected; return
+    end
     -- Compose the three native atlases used by PanelTopTabButtonTemplate.
     -- Flip the full art upward; keep its whole center strip for a continuous
     -- gold edge. Fixed dimensions also keep labels and prompts inside each tab.
@@ -98,15 +108,25 @@ function T.Tab(button, selected)
     button.tabSelected = selected
     T.ButtonFonts(button, selected and "GameFontHighlight" or "GameFontNormal")
 end
-function T.Regular(button)
+function T.Regular(button, keyboard)
+    if keyboard then T.KeyboardButton(button); return end
     if button.tabArt then for _, texture in ipairs(button.tabArt) do texture:Hide() end end
     button.tabSelected = nil
-    button:SetNormalTexture("Interface\\Common\\dark-goldframe-button")
-    button:SetPushedTexture("Interface\\Common\\dark-goldframe-button-pressed")
+    local skin = "gold"
+    button:SetNormalTexture(skin == "classic" and "Interface\\Buttons\\UI-Panel-Button-Up"
+        or skin == "minimal" and "Interface\\Buttons\\WHITE8X8" or "Interface\\Common\\dark-goldframe-button")
+    button:SetPushedTexture(skin == "classic" and "Interface\\Buttons\\UI-Panel-Button-Down"
+        or skin == "minimal" and "Interface\\Buttons\\WHITE8X8" or "Interface\\Common\\dark-goldframe-button-pressed")
+    local normal, pushed = button:GetNormalTexture(), button:GetPushedTexture()
+    for _, texture in ipairs({ normal, pushed }) do
+        if skin == "classic" then texture:SetTexCoord(0, .625, 0, .6875) else texture:SetTexCoord(0, 1, 0, 1) end
+        texture:SetVertexColor(1, 1, 1, 1)
+    end
+    if skin == "minimal" then normal:SetVertexColor(.13, .11, .08, 1); pushed:SetVertexColor(.3, .24, .12, 1) end
     button:SetHighlightTexture("Interface\\Buttons\\UI-Silver-Button-Highlight", "ADD")
     T.ButtonFonts(button)
 end
-function T.FocusBadge(button)
+function T.FocusBadge(button, binding)
     button:ClearNormalTexture(); button:ClearPushedTexture(); button:ClearHighlightTexture()
     button.prompt:Hide()
     if not button.badgeIcon then
@@ -114,20 +134,33 @@ function T.FocusBadge(button)
         button:HookScript("OnEnter", function() button.badgeIcon:SetAlpha(0.8) end)
         button:HookScript("OnLeave", function() button.badgeIcon:SetAlpha(1) end)
     end
-    local atlas = W.Input:Icon("focus")
+    local atlas
+    if binding == nil then
+        atlas = W.Input:Icon("focus")
+    elseif binding then
+        atlas = W.Input:TokenIcon(binding)
+    end
+    button.badgeIcon:SetShown(atlas ~= nil and atlas ~= false)
+    if not atlas then
+        local text = binding and (GetBindingText and GetBindingText(binding, "KEY_") or binding) or W.L["Focus"]
+        button:SetText(text)
+        button:SetWidth(math.max(32, (W.Call(button:GetFontString(), "GetStringWidth") or #text * 8) + 10))
+        return
+    end
+    if binding ~= nil then button:SetText(""); button:SetWidth(32) end
     button.badgeIcon:SetAtlas(atlas)
     local info = C_Texture and C_Texture.GetAtlasInfo(atlas)
     local padding = info and info.width == 76 and info.height == 75 and 5 or 0
     button.badgeIcon:ClearAllPoints(); button.badgeIcon:SetPoint("CENTER")
     button.badgeIcon:SetSize(32 + padding * 2, 32 + padding * 2)
 end
-function T.Prompt(button, actions, mode)
+function T.Prompt(button, actions, mode, tokens)
     local prompt = button.prompt
     for _, icon in ipairs(prompt.icons) do icon:Hide() end
     prompt.plus:Hide(); prompt:ClearAllPoints()
-    local count, size = 0, mode == "corner" and 18 or mode == "phrase" and 20 or 22
-    for _, action in ipairs(actions or {}) do
-        local atlas = W.Input:Icon(action)
+    local count, size = 0, (mode == "corner" or mode == "combo") and 18 or mode == "phrase" and 20 or 22
+    for i, action in ipairs(actions or {}) do
+        local atlas = tokens and W.Input:TokenIcon(tokens[i]) or W.Input:Icon(action)
         if atlas then
             count = count + 1
             local icon = prompt.icons[count]
@@ -144,8 +177,14 @@ function T.Prompt(button, actions, mode)
     local width = count * size + math.max(0, count - 1) * 12
     prompt:SetSize(math.max(width, 1), size)
     local label = button:GetFontString()
+    -- Empty/icon-only Buttons may not have an engine-created FontString.
+    -- Attach one explicitly so later pooled text/layout updates use it too.
+    if not label then
+        label = T.Label(button, button:GetText())
+        button:SetFontString(label)
+    end
     label:ClearAllPoints(); label:SetJustifyH("CENTER")
-    if button.tabSelected ~= nil then
+    if button.tabSelected ~= nil and not button.keyboardSkin then
         -- Account for the visible lettering and native strip's padding, not
         -- just their rectangular bounds. Inactive art needs a deeper inset.
         local y = ((button.tabSelected and 34 or 28) - button:GetHeight()) / 2
@@ -153,6 +192,13 @@ function T.Prompt(button, actions, mode)
         prompt:SetPoint("LEFT", 8, y)
         label:SetPoint("LEFT", count > 0 and width + 16 or 8, y)
         label:SetPoint("RIGHT", -8, y)
+    elseif mode == "bank" then
+        prompt:SetPoint("CENTER")
+        label:SetPoint("CENTER"); label:SetWidth(button:GetWidth() - 4)
+    elseif mode == "combo" then
+        prompt:SetPoint("TOP", 0, 0)
+        label:SetPoint("LEFT", 5, -4); label:SetPoint("RIGHT", -5, -4)
+        label:SetJustifyH("CENTER"); label:SetWordWrap(true); label:SetHeight((W.db.fontSize or 14) * 2 + 2)
     elseif mode == "phrase" then
         prompt:SetPoint("TOPLEFT", 8, -5)
         label:SetPoint("BOTTOMLEFT", 8, 6); label:SetPoint("BOTTOMRIGHT", -8, 6)

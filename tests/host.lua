@@ -8,13 +8,38 @@ local function object(kind, name, parent)
 end
 function methods:GetName() return self.name end
 function methods:GetParent() return self.parent end
-function methods:SetParent(parent) self.parent=parent end
+function methods:SetParent(parent)
+    if self.parent then
+        for i,child in ipairs(self.parent.children) do
+            if child==self then table.remove(self.parent.children,i);break end
+        end
+    end
+    self.parent=parent
+    if parent then parent.children[#parent.children+1]=self end
+end
 function methods:GetChildren() return unpack(self.children) end
 function methods:IsObjectType(kind) return self.kind==kind end
 function methods:IsVisible() return self.shown and (not self.parent or self.parent:IsVisible()) end
 function methods:IsShown() return self.shown end
-function methods:Show() self.shown=true end
-function methods:Hide() self.shown=false;if self.scripts.OnHide then self.scripts.OnHide(self) end end
+local function visibilityTree(frame, snapshots)
+    snapshots[#snapshots+1]={frame,frame:IsVisible()}
+    for _,child in ipairs(frame.children) do visibilityTree(child,snapshots) end
+end
+local function setShown(frame, shown)
+    local snapshots={};visibilityTree(frame,snapshots)
+    frame.shown=shown
+    for _,snapshot in ipairs(snapshots) do
+        local child,before=snapshot[1],snapshot[2]
+        local after=child:IsVisible()
+        if before~=after then
+            local fn=child.scripts[after and "OnShow" or "OnHide"]
+            if fn then fn(child) end
+        end
+    end
+end
+function methods:Show() setShown(self,true) end
+function methods:Hide() setShown(self,false) end
+function methods:SetShown(on) if on then self:Show() else self:Hide() end end
 function methods:SetScript(script,fn) self.scripts[script]=fn end
 function methods:HookScript(script,fn) local old=self.scripts[script];self.scripts[script]=function(...)if old then old(...)end;fn(...)end end
 function methods:GetScript(script) return self.scripts[script] end
@@ -34,18 +59,36 @@ function methods:GetScale() return self.scale end
 function methods:SetScale(s) self.scale=s end
 function methods:GetEffectiveScale() return self.scale*(self.parent and self.parent:GetEffectiveScale() or 1) end
 function methods:SetFrameStrata() end
+function methods:GetFrameLevel() return self.frameLevel or 1 end
+function methods:SetFrameLevel(level) self.frameLevel=level end
 function methods:SetMovable() end
 function methods:SetClampedToScreen() end
 function methods:StartMoving() end
 function methods:StopMovingOrSizing() end
 function methods:RegisterForDrag() end
+function methods:RegisterForClicks(...) self.clicks={...} end
+function methods:SetBindingClick(_,key,name,button) self.binds=self.binds or {};self.binds[key]={name,button} end
+function methods:ClearBindings() self.binds={} end
+function SetOverrideBindingClick(frame,priority,key,name,button)
+    assert(not HOST.combat);frame:SetBindingClick(priority,key,name,button)
+end
+function ClearOverrideBindings(frame) assert(not HOST.combat);frame:ClearBindings() end
+function RegisterStateDriver(frame,key) frame:SetAttribute("state-"..key,"ready") end
 function methods:EnableMouse() end
+function methods:EnableKeyboard(on) self.keyboardEnabled=on end
+function methods:SetPropagateKeyboardInput(on) self.propagateKeyboard=on end
+function methods:EnableMouseWheel(on) self.mouseWheelEnabled=on end
 function methods:EnableGamePadButton(on) assert(not HOST.combat);self.pad=on end
 function methods:EnableGamePadStick(on) assert(not HOST.combat);self.stick=on end
 function methods:IsGamePadButtonEnabled() return self.pad end
+function methods:IsGamePadStickEnabled() return self.stick end
 function methods:CreateFontString() return object("FontString",nil,self) end
 function methods:CreateTexture() return object("Texture",nil,self) end
-function methods:GetFontString() if not self.label then self.label=object("FontString",nil,self) end;return self.label end
+function methods:CreateMaskTexture() return object("MaskTexture",nil,self) end
+function methods:AddMaskTexture(mask) self.masks=self.masks or {};self.masks[mask]=true end
+function methods:RemoveMaskTexture(mask) if self.masks then self.masks[mask]=nil end end
+function methods:GetFontString() return self.label end
+function methods:SetFontString(label) assert(label and label.kind=="FontString");self.label=label end
 function methods:GetFont()
     if self.fontObject then return self.fontObject:GetFont() end
     return self.fontFile or "Fonts\\FRIZQT__.TTF", self.fontHeight or 12, self.fontFlags or ""
@@ -53,17 +96,31 @@ end
 function methods:SetFont(path,height,flags) self.fontFile=path;self.fontHeight=height;self.fontFlags=flags end
 function methods:CopyFontObject(font) self:SetFont(font:GetFont()) end
 function methods:SetFontObject(font) self.fontObject=font end
-function methods:SetNormalFontObject(font) self.normalFont=font;self:GetFontString():SetFontObject(font) end
+function methods:SetNormalFontObject(font) self.normalFont=font;if self.label then self.label:SetFontObject(font) end end
 function methods:SetHighlightFontObject(font) self.highlightFont=font end
 function methods:SetDisabledFontObject(font) self.disabledFont=font end
 function methods:SetWordWrap(on) self.wordWrap=on end
-function methods:SetAtlas(atlas) self.atlas=atlas end
+function methods:SetChecked(on) self.checked=on and true or false end
+function methods:GetChecked() return self.checked or false end
+function methods:SetHitRectInsets(...) self.hitInsets={...} end
+function methods:SetAtlas(atlas)
+    assert(type(atlas)=="string" and atlas~="", "Texture:SetAtlas(): atlasName must be a nonempty string")
+    self.atlas=atlas
+end
 function methods:SetTexCoord(...) self.texCoords={...} end
 function methods:SetHorizTile(on) self.horizTile=on end
-function methods:SetVertexColor(...) self.vertexColor={...} end
+function methods:SetVertexColor(...) self.vertexColor={...};self.gradient=nil end
 function methods:SetColorTexture(...) self.color={...} end
+function methods:SetGradient(orientation, low, high) self.gradient={orientation,low,high};self.vertexColor=nil end
 function methods:SetTextInsets(...) self.textInsets={...} end
-function methods:SetText(s) self.text=s;self.cursor=#s;self.highlight=nil;if self.scripts.OnTextChanged then self.scripts.OnTextChanged(self,false) end end
+function methods:SetText(s)
+    self.text=s;self.cursor=#s;self.highlight=nil
+    if (self.kind=="Button"or self.kind=="CheckButton")and s~=""and not self.label then
+        self.label=object("FontString",nil,self);self.label:SetFontObject(self.normalFont or GameFontNormal)
+    end
+    if self.label then self.label.text=s end
+    if self.scripts.OnTextChanged then self.scripts.OnTextChanged(self,false) end
+end
 function methods:ClearHighlightText() self.highlight=nil end
 function methods:Insert(value)
     local a,b=self.cursor,self.cursor
@@ -83,6 +140,7 @@ function methods:SetAutoFocus() end
 function methods:SetMultiLine(on) self.multi=on end
 function methods:IsMultiLine() return self.multi end
 function methods:SetMaxBytes(n) self.maxBytes=n end
+function methods:SetMaxLetters(n) self.maxLetters=n end
 function methods:GetMaxBytes() return self.maxBytes or 0 end
 function methods:GetMaxLetters() return self.maxLetters or 0 end
 function methods:GetNumLines() local _,n=self.text:gsub("\n","");return n+1 end
@@ -114,9 +172,24 @@ for _,state in ipairs({"Normal","Pushed","Highlight"}) do
         self[key]=asset
     end
     methods["Clear"..state.."Texture"]=function(self) self[key]=nil end
+    methods["Get"..state.."Texture"]=function(self)
+        if self[key]==nil then return end
+        local regionKey=key.."Region"
+        if not self[regionKey]then self[regionKey]=object("Texture",nil,self)end
+        self[regionKey].asset=self[key]
+        return self[regionKey]
+    end
 end
 for _,name in ipairs({"SetBackdrop","SetBackdropColor","SetBackdropBorderColor","SetTexture","SetBlendMode","SetJustifyH","SetAlpha"}) do methods[name]=function()end end
+function methods:SetBackdrop(value) self.backdrop=value end
+function methods:SetBackdropColor(...) self.backdropColor={...} end
 HOST={now=1,focus=nil,combat=false,pad={labelStyle="Xbox",buttons={},sticks={}},keys={},sent={},callbacks={},queue={},nativeEnters={},commands={}}
+function CreateColor(r,g,b,a) return {r=r,g=g,b=b,a=a} end
+C_Texture={GetAtlasInfo=function(atlas)
+    if atlas:find("gamepad-actionbar-squareslot-border-",1,true)then
+        return {file=12345,width=64,height=64,leftTexCoord=.2,rightTexCoord=.4,topTexCoord=.1,bottomTexCoord=.5}
+    end
+end}
 -- Deliberate native-Enter receiver fixture, not a macro/chat parser emulator.
 function HOST.NativeChatEnter(box)
     local text=box:GetText();HOST.nativeEnters[#HOST.nativeEnters+1]=text
@@ -130,7 +203,26 @@ function HOST.NativeChatEnter(box)
     end
     box:SetText("");box:ClearFocus();box:Hide()
 end
-function CreateFrame(kind,name,parent,template) return object(kind,name,parent) end
+function CreateFrame(kind,name,parent,template)
+    local f=object(kind,name,parent);f.template=template
+    if template=="UIPanelButtonTemplate"then
+        f:SetNormalTexture("Interface\\Buttons\\UI-Panel-Button-Up")
+        f:SetPushedTexture("Interface\\Buttons\\UI-Panel-Button-Down")
+        f:SetHighlightTexture("Interface\\Buttons\\UI-Panel-Button-Highlight")
+        f:SetFontString(f:CreateFontString())
+    elseif template=="MinimalScrollBar"then
+        f.Back=object("Button",nil,f);f.Forward=object("Button",nil,f)
+        f.Track=object("Frame",nil,f);f.Track.Thumb=object("Button",nil,f.Track)
+        function f:Init(v,p)self.visibleExtent=v;self.panExtent=p;self.percentage=0 end
+        function f:SetVisibleExtentPercentage(v)self.visibleExtent=v end
+        function f:SetPanExtentPercentage(p)self.panExtent=p end
+        function f:RegisterCallback(event,fn,owner)self.callback=fn;self.callbackOwner=owner end
+        function f:SetScrollPercentage(p)self.percentage=p;if self.callback then self.callback(self.callbackOwner,p)end end
+        function f:UnregisterUpdate()self.cancelled=true end
+    end
+    return f
+end
+ScrollBarMixin={Event={OnScroll="OnScroll"}}
 UIParent=CreateFrame("Frame","UIParent");UIParent:SetSize(1920,1080)
 ChatFrame1=CreateFrame("Frame","ChatFrame1",UIParent);ChatFrame1:SetSize(420,160)
 function CreateFont(name) return object("Font",name) end
@@ -165,11 +257,15 @@ function HOST.Field(name,text,numeric,parent)
     return f
 end
 function HOST.Press(token)
-    local f=WoWEnhancedController.Keyboard.frame
-    WoWEnhancedController.Input.waitNeutral=false
+    local input=WoWEnhancedController.Input
+    local bridge=WoWEnhancedController.KeyboardBindings
+    local f=bridge and bridge.active and bridge.button or WoWEnhancedController.Keyboard.frame
+    input.waitNeutral=false
     HOST.keys[token]=true
-    f:GetScript("OnGamePadButtonDown")(f,token)
+    if bridge and bridge.active then f:GetScript("OnClick")(f,token,true)
+    else f:GetScript("OnGamePadButtonDown")(f,token) end
     HOST.keys[token]=false
-    f:GetScript("OnGamePadButtonUp")(f,token)
+    if f==bridge.button then f:GetScript("OnClick")(f,token,false)
+    else f:GetScript("OnGamePadButtonUp")(f,token) end
 end
 return HOST
