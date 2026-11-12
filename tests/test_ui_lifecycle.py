@@ -87,6 +87,23 @@ class UILifecycleTests(unittest.TestCase):
             assert(writes==1 and not W.KeyboardBindings.active and not k.session and not box:HasFocus() and #HOST.sent==0)
         ''')
 
+    def test_unfocused_native_chat_field_is_never_refocused_by_the_addon(self):
+        self.run_lua('''
+            local k=W.Keyboard
+            local box=HOST.Field("ChatFrame1EditBox","draft");box:SetAttribute("chatType","PARTY")
+            box.chatFrame=ChatFrame1;box:SetFocus();k:Open(box)
+            W.ControllerMode=function()return true end
+            local calls=0;local focus=box.SetFocus
+            box.SetFocus=function(...)calls=calls+1;return focus(...)end
+            assert(k:FocusField()==true and calls==0)
+            box:ClearFocus()
+            assert(k:FocusField()==false and calls==0 and not box:HasFocus())
+            local other=HOST.Field("OtherNativeBox","x");other:SetFocus();k:Close();k:Open(other);other:ClearFocus()
+            local refocused=0;local plain=other.SetFocus
+            other.SetFocus=function(...)refocused=refocused+1;return plain(...)end
+            if k.session then assert(k:FocusField()==true and refocused==1) end
+        ''')
+
     def test_native_radial_suspends_capture_then_restores_only_visible_windows(self):
         self.run_lua('''
             local k=W.Keyboard;local box=HOST.Field("ChatFrame1EditBox","kept")

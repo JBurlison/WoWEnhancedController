@@ -111,6 +111,14 @@ function K:FocusField()
     local box = self:InputOwner()
     if not box then return end
     if not W.Call(box, "HasFocus") then
+        -- Never focus a native chat field from addon code. Its focus handler
+        -- would run tainted and write chat globals (LAST_ACTIVE_CHAT_EDIT_BOX,
+        -- SELECTED_CHAT_FRAME) that native gamepad focus reads later, which
+        -- blocks SetPreferredGamepadInteractTarget. The player reopens chat.
+        if box.chatFrame and not box.wecOwned then
+            self:Status(W.L["Chat lost focus. Open chat again to keep typing."])
+            return false
+        end
         local syncing = self.syncing
         self.syncing = true
         W.Call(box, "SetFocus")
@@ -122,6 +130,7 @@ function K:FocusField()
         end
         self.syncing = syncing
     end
+    return W.Call(box, "HasFocus") == true
 end
 function K:Sync()
     if not self.editor then return end
@@ -210,7 +219,8 @@ function K:AddRow(items, y, height, left, span)
                         local focus = W.Focus()
                         if focus and focus ~= owned and not (self.composing and self.session and focus == self.session.target) then self.suspended = true; self:Hide(); return end
                         if owned.chatFrame and not W.ControllerMode() then return end
-                        self:FocusField(); W.Input:Acquire()
+                        if not self:FocusField() then return end
+                        W.Input:Acquire()
                     end
                     if b.generation == self.generation and b.run then b.run() end
                 end)
@@ -222,7 +232,8 @@ function K:AddRow(items, y, height, left, span)
                     local focus = W.Focus()
                     if focus and focus ~= owned and not (self.composing and self.session and focus == self.session.target) then b.skipClick = true; W.WatchFocus(); return end
                     if owned.chatFrame and not W.ControllerMode() and not W.Call(owned,"HasFocus") then b.skipClick = true; return end
-                    self.mouseEditing = b; self:FocusField(); W.Input:Acquire()
+                    self.mouseEditing = b
+                    if self:FocusField() then W.Input:Acquire() else b.skipClick = true end
                 end)
                 button:SetScript("OnMouseUp", function() self.mouseEditing = nil end)
                 self.pool[self.used] = button
