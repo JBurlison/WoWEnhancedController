@@ -21,6 +21,9 @@ S.invalidate = [[
 ]]
 S.stage = [[
     local stage, group, member, page = ...
+    if stage == "root" and self:GetAttribute("solo") then
+        stage, group, member = "spells", 1, 1
+    end
     self:RunAttribute("op-clearAim", true)
     self:SetAttribute("stage", stage)
     self:SetAttribute("group", group or 1)
@@ -183,7 +186,8 @@ S.mousePoint = [[
 ]]
 S.cancelSweep = [[
     local group = self:GetAttribute("group")
-    self:RunAttribute("op-stage", self:GetAttribute("raid") and "members" or "root", group)
+    local page = self:GetAttribute("solo") and self:GetAttribute("page") or nil
+    self:RunAttribute("op-stage", self:GetAttribute("raid") and "members" or "root", group, nil, page)
 ]]
 S.sweepClick = [[
     local ref, button, down = ...
@@ -262,7 +266,7 @@ S.click = [[
     end
     if button == "SweepMouse" then return false end
     if sweep and down and (button == "Back" or button == "BackDpad" or button == "Cancel") then
-        if button=="Cancel" then self:RunAttribute("op-close") else self:RunAttribute("op-cancelSweep") end
+        if button=="Cancel" or self:GetAttribute("solo") then self:RunAttribute("op-close") else self:RunAttribute("op-cancelSweep") end
         return false
     end
     if sweep and (index or button=="Confirm" or button=="ConfirmDpad") then return false end
@@ -301,7 +305,8 @@ S.click = [[
     if stage ~= self:GetAttribute("press-stage") or member ~= self:GetAttribute("press-member")
         or page ~= self:GetAttribute("press-page") then return false end
     if button == "Back" or button == "BackDpad" then
-        if stage == "spells" then self:RunAttribute("op-stage", self:GetAttribute("raid") and "members" or "root", group)
+        if self:GetAttribute("solo") then self:RunAttribute("op-close")
+        elseif stage == "spells" then self:RunAttribute("op-stage", self:GetAttribute("raid") and "members" or "root", group)
         elseif stage == "members" then self:RunAttribute("op-stage", "root", group)
         else self:RunAttribute("op-close") end
         return false

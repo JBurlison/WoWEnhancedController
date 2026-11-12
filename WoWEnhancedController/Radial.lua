@@ -210,6 +210,7 @@ function R:Rebuild()
     end
     local s = self.snapshot
     f:SetAttribute("raid", s.raid); f:SetAttribute("member-count", #s.members)
+    f:SetAttribute("solo", not IsInGroup() and not s.raid and #s.members == 1 and s.members[1].unit == "player")
     f:SetAttribute("action-count", math.min(#self.actions, D.maxActions))
     f:SetAttribute("enabled", W.db.enabled and W.db.radial.enabled)
     f:SetAttribute("after-action", W.db.radial.afterAction)
@@ -551,7 +552,7 @@ function R:Paint()
     -- The wheel owns its Back binding independently of keyboard remaps.
     prompt(self.backGlyph,"Back");prompt(self.backDpadGlyph,"BackDpad")
     self.backSeparator:SetShown(self.backGlyph:IsShown() and self.backDpadGlyph:IsShown())
-    self.backLabel:SetText(stage=="root" and W.L["Close"] or W.L["Back"])
+    self.backLabel:SetText((stage=="root" or f:GetAttribute("solo")) and W.L["Close"] or W.L["Back"])
     prompt(self.raidGlyph,"RaidGroups");prompt(self.membersGlyph,"RaidMembers")
     for _,region in ipairs({self.raidLabel,self.membersLabel})do region:SetShown(self.snapshot.raid)end
     if not self.snapshot.raid then self.raidGlyph:Hide();self.membersGlyph:Hide() end

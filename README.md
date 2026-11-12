@@ -26,7 +26,9 @@ Choose **Link in chat** to share an item, recipe, or quest. Selecting a quest ti
 
 ## Use the party and raid wheel
 
-With the default **Hold & sweep** controls:
+When you're solo, the wheel opens directly on your spells with you as the recipient. Point at a spell and confirm to cast it on yourself. Back closes the wheel.
+
+In a party or raid, use the default **Hold & sweep** controls:
 
 1. Click the right stick to open the wheel. In a raid, choose a group first.
 2. Point the right stick at an ally and hold the left trigger to select them. The wheel shows health and debuffs you can dispel.

@@ -33,6 +33,7 @@ function UnitIsConnected(unit) return UnitExists(unit) and not HOST.units[unit].
 function UnitIsDeadOrGhost() return false end
 function UnitCanAssist(_,unit) return UnitExists(unit) and unit~="target" end
 function IsInRaid() return HOST.raid or false end
+function IsInGroup() return HOST.raid or HOST.grouped or UnitExists("party1") end
 function GetNumGroupMembers() return HOST.raid and 40 or 5 end
 function GetRaidRosterInfo(i) local u=HOST.units["raid"..i];return u and u.name,0,u and u.group end
 function GetSpecialization() return HOST.spec end

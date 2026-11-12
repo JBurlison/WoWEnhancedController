@@ -106,19 +106,21 @@ function R:PaintSweep(stage, member, page)
         elseif selected>0 then spell=selected
         else spell=pointed>0 and pointed or (not held and mouseSpell) end
     else ally=pointed>0 and pointed or selected>0 and selected or mouseMember end
+    local solo = f:GetAttribute("solo")
+    layer.inner:SetShown(not solo)
     layer.inner:SetTexture(media.."Wheel"..count)
     local marked=ally
     for i,cell in ipairs(layer.members) do
         local m = self.snapshot.members[roster[i]]
-        cell:SetShown(m~=nil)
-        if m then
+        cell:SetShown(m~=nil and not solo)
+        if m and not solo then
             if roster[i]==member then marked=i end
             place(cell,layer,i,count,W.db.radial.size*.211)
             cell.label:SetText(W.Escape(m.unit=="player" and W.L["You"] or m.name))
             if W.db.radial.health then self:PaintHealth(nil,cell.bar,m) else cell.bar:Hide() end
         end
     end
-    layer.mark:SetShown(marked~=nil)
+    layer.mark:SetShown(marked~=nil and not solo)
     if marked then
         layer.mark:SetTexture(media.."Highlight"..count); layer.mark:SetRotation(-(marked-1)*2*math.pi/count)
     end
