@@ -354,14 +354,14 @@ class MacroTests(unittest.TestCase):
             assert(not E.controls["starter-cast"])
             E:Focus("action1")
             local text=E.codeText:GetText()
-            assert(text:find("|cff8ec5f2/cast|r",1,true) and text:find("|cffa5dc94[@focus]|r",1,true))
-            assert(text:find("|cffffd100 Re||new|r",1,true) and text:find("/use|r 13",1,true))
+            assert(text:find("|cff193f68/cast|r",1,true) and text:find("|cff264c2b[@focus]|r",1,true))
+            assert(text:find("|cff852f08 Re||new|r",1,true) and text:find("/use|r 13",1,true))
             local click=E.inputButton:GetScript("OnClick")
             click(E.inputButton,W.Input.keys.phrases,true);HOST.MacroPress("PADDDOWN")
             assert(E.model.blocks[1].kind=="item" and E.selected=="action2" and E.reorder)
             click(E.inputButton,W.Input.keys.phrases,false);assert(not E.reorder)
             HOST.MacroPress("PADDUP");assert(E.selected=="action1" and E.model.blocks[1].kind=="item")
-            assert(E.codeText:GetText():find("|cffffd100 13|r",1,true))
+            assert(E.codeText:GetText():find("|cff852f08 13|r",1,true))
             assert(E.checks:GetText():find("Name needs",1,true) and not E.save:IsEnabled())
             HOST.MacroPress(W.Input.keys.shift);assert(#HOST.account==0 and E.dirty)
             E.model.name="Shortcut";E:Preview();assert(E.checks:GetText():find("Name is valid",1,true))
@@ -388,6 +388,40 @@ class MacroTests(unittest.TestCase):
             local stale=E.lists.choices
             E:Back();local current=E.selected;stale.bar:SetScrollPercentage(1)
             assert(E.selected==current and not E.modal)
+        ''')
+
+    def test_folio_row_focus_and_saved_macro_selection_are_independent(self):
+        self.run_lua('''
+            local E=W.MacroEditor
+            local first=assert(W.MacroData.Save(HOST.Draft("First")))
+            assert(W.MacroData.Save(HOST.Draft("Second")))
+            E:Open();E:Load(first);E:RequestFocus();E:Focus("macro:2")
+            local saved,focused=E.controls["macro:1"],E.controls["macro:2"]
+            assert(saved.selection:IsShown() and not saved.pointer:IsShown())
+            assert(focused.pointer:IsShown() and not focused.selection:IsShown() and not focused.focus:IsShown())
+            assert(focused.pointer.atlas=="gamepad-largecursor" and E.controls.scope.caret:IsShown())
+            E:Tab("templates");E:Focus("template-category");HOST.MacroPress(W.Input.keys.primary)
+            assert(E.modal and E.controls.choice1 and not E.controls.choice1.selection:IsShown())
+            E:Back();E:Focus("macro:1");assert(E.controls["macro:1"].selection:IsShown())
+        ''')
+
+    def test_macro_dropdowns_share_the_keyboard_bevel_and_focus_rim(self):
+        self.run_lua('''
+            W.db.keyboardAppearance.buttons="gold"
+            local editor=W.MacroEditor
+            editor:Open();editor:RequestFocus()
+            local add=editor.controls["add-action"]
+            local more=editor.controls.more
+            assert(add:GetWidth()>more:GetWidth())
+            for _,button in ipairs({add,more,editor.controls.tooltip}) do
+                assert(button.keyboardSkin=="controller" and not button:GetNormalTexture())
+                assert(#button.keyboardArt.normal.parts==8 and button.caret:IsShown())
+                assert(button.keyboardArt.normal.parts[1]:GetWidth()==8)
+            end
+            editor:Focus("add-action")
+            assert(add.focus:IsShown() and not add.edge:IsShown() and not more.focus:IsShown())
+            HOST.MacroPress(W.Input.keys.primary);assert(editor.modal)
+            HOST.MacroPress(W.Input.keys.back);assert(editor.selected=="add-action")
         ''')
 
 if __name__=='__main__': unittest.main()

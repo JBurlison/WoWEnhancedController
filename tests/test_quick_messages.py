@@ -62,6 +62,27 @@ class QuickMessageTests(unittest.TestCase):
             k:Action("back");assert(not k.frame:IsShown())
         ''')
 
+    def test_saved_reload_shortcut_reloads_once_without_sending_the_command_or_draft(self):
+        self.run_lua('''
+            local k=W.Keyboard
+            local box=HOST.Field("ChatFrame1EditBox","unfinished draft")
+            box:SetAttribute("chatType","SAY");k:Open(box)
+            local reloads=0
+            ReloadUI=function() reloads=reloads+1 end
+            W.Phrases.Save("chat",1,"/reload")
+            local f=k.frame;W.Input.waitNeutral=false
+            f:GetScript("OnGamePadButtonDown")(f,"PADLTRIGGER")
+            HOST.Press("PAD1")
+            f:GetScript("OnGamePadButtonUp")(f,"PADLTRIGGER")
+            assert(reloads==1 and #HOST.sent==0 and box:GetText()=="unfinished draft")
+            W.Phrases.Save("chat",2," /RELOAD ",nil,nil,{chatType="CHANNEL",channelName="Left channel"})
+            k:UsePhrase(2)
+            assert(reloads==2 and #HOST.sent==0)
+            W.Phrases.Save("chat",3,"Try /reload")
+            k:UsePhrase(3)
+            assert(reloads==2 and #HOST.sent==1 and HOST.sent[1][1]=="Try /reload")
+        ''')
+
     def test_quick_send_uses_active_whisper_target_and_refuses_stale_destinations(self):
         self.run_lua('''
             local k=W.Keyboard;local box=HOST.Field("ChatFrame1EditBox","/p unfinished")

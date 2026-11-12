@@ -2,6 +2,7 @@
 local _, W = ...
 if W.Locale.code ~= "frFR" then return end
 local L = W.L
+L["Actions"] = "Actions"
 L["Current chat"] = "Discussion actuelle"
 L["Send to: %s"] = "Envoyer à : %s"
 L["Channel: %s"] = "Canal : %s"

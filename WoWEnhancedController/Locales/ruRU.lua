@@ -2,6 +2,7 @@
 local _, W = ...
 if W.Locale.code ~= "ruRU" then return end
 local L = W.L
+L["Actions"] = "Действия"
 L["Current chat"] = "Текущий чат"
 L["Send to: %s"] = "Отправлять в: %s"
 L["Channel: %s"] = "Канал: %s"

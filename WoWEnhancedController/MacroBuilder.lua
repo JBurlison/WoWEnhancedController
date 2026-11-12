@@ -10,6 +10,16 @@ local starters={{"cast","Cast a spell","Pick a spell, then add targets and condi
     {"sequence","Cast sequence","A different spell on each press.","Interface\\Icons\\INV_Misc_PocketWatch_01"},
     {"templates","Browse templates","Start from a ready-made macro for your class.","Interface\\Icons\\INV_Misc_Book_09"},
     {"raw","Custom commands","Type the macro text yourself.","Interface\\Icons\\INV_Misc_Note_01"}}
+local blockIcons={cast=starters[1][4],sequence=starters[2][4],raw=starters[4][4],
+    item="Interface\\Icons\\INV_Jewelry_Talisman_08",command="Interface\\Icons\\Ability_Warrior_BattleShout"}
+local function blockIcon(block)
+    if not block then return 134400 end
+    local spell=(block.rules or block.steps or {})[1]
+    local info=spell and spell.spellID and W.RadialData.Info(spell.spellID)
+    if info and info.iconID then return info.iconID end
+    if block.verb=="petattack" then return "Interface\\Icons\\Ability_Hunter_Pet_Assist" end
+    return blockIcons[block.kind] or 134400
+end
 local function title(options,value)
     for _,v in ipairs(options) do if v[1]==value then return L[v[2]] end end
     return tostring(value or "")
@@ -35,11 +45,11 @@ end
 function E:DrawTemplates()
     self.category=self.category or "class"
     if not self.class then local _,class=UnitClass("player");self.class=class or "PRIEST" end
-    self:Dropdown("template-category",title(T.categories,self.category),252,202,260,function()
+    self:Dropdown("template-category",title(T.categories,self.category),252,211,260,function()
         self:SelectValue(L["Template category"],T.categories,self.category,function(value)self.category=value end,nil,true)
     end)
     local classes={};for _,class in ipairs(T.classes) do classes[#classes+1]={class,(LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[class]) or class} end
-    self:Dropdown("template-class",title(classes,self.class),528,202,260,function()
+    self:Dropdown("template-class",title(classes,self.class),528,211,260,function()
         self:SelectValue(L["Class"],classes,self.class,function(value)self.class=value end,nil,true)
     end):SetEnabled(self.category=="class")
     local list=T.Filter(self.category,self.class)
@@ -50,9 +60,8 @@ function E:DrawTemplates()
                     self.model=T.Model(entry,self.scope);self.snapshot=nil;self.dirty=true;self.detail=nil;self.rule=nil;self.tab="build";self:Draw()
                 end)
             end}},L[entry.description].." "..L["Replace unavailable spells before saving."])
-        end,76,parent)
-        local first=entry.blocks[1];local spell=first and ((first.rules or first.steps or {})[1]);local info=spell and spell.spellID and W.RadialData.Info(spell.spellID)
-        return S.Card(b,L[entry.description],info and info.iconID or 134400)
+        end,76,parent,"row")
+        return S.Card(b,L[entry.description],blockIcon(entry.blocks[1]))
     end,self.category..":"..self.class)
 end
 function E:AddBlock(kind)
@@ -79,36 +88,52 @@ function E:BlockTitle(block)
     elseif block.kind=="command" then return title(commands,block.verb) end
     return L["Custom commands"]
 end
+local function blockDetail(block,compiled)
+    if not compiled then return L["Choose a spell or configure this action."] end
+    local rule=block.kind=="cast" and block.rules and block.rules[1]
+    if rule and #block.rules==1 and (rule.modifier or "any")=="any" and (rule.combat or "any")=="any" and rule.form==nil then
+        local labels={title(targets,rule.target or "target")}
+        if rule.relation=="help" then labels[#labels+1]=L["Friendly target"]
+        elseif rule.relation=="harm" then labels[#labels+1]=L["Hostile target"]
+        elseif rule.relation=="exists" then labels[#labels+1]=L["Target exists"] end
+        if rule.alive then labels[#labels+1]=L["Alive only"] end
+        return table.concat(labels," · ")
+    end
+    return S.Code(compiled)
+end
 function E:DrawBuilder()
     if self.detail and self.model.blocks[self.detail] then self:DrawAction();return end
-    self:Button("tooltip",self.model.tooltip and L["Tooltip: automatic"] or L["Tooltip: off"],252,202,260,function()self.model.tooltip=not self.model.tooltip;self:Changed();self:Draw()end)
-    self:Dropdown("add-action",L["Add action"],528,202,260,function()self:AddAction()end)
+    self:Dropdown("tooltip",self.model.tooltip and L["Tooltip: automatic"] or L["Tooltip: off"],252,211,260,function()
+        self:SelectValue(L["Tooltip: automatic"],{{true,"Tooltip: automatic"},{false,"Tooltip: off"}},self.model.tooltip,function(on)self.model.tooltip=on end)
+    end)
+    local empty=#self.model.blocks==0
+    local addY=empty and 211 or math.min(552,259+#self.model.blocks*66)
+    self:Dropdown("add-action",L["Add action"],empty and 528 or 252,addY,260,function()self:AddAction()end)
     if #self.model.blocks==0 then
         -- An empty draft offers starting points instead of an instruction.
-        self:Label(L["What should this macro do?"],252,262,536,30):SetFontObject(S.Font("GameFontNormal",2))
+        self:Label(L["What should this macro do?"],252,260,536,30):SetFontObject(S.Font("GameFontNormal",2,"ink"))
         for i,starter in ipairs(starters) do
             local kind=starter[1]
-            local b=self:Button("starter-"..kind,L[starter[2]],252+((i-1)%2)*276,304+math.floor((i-1)/2)*96,260,function()
+            local b=self:Button("starter-"..kind,L[starter[2]],252,293+(i-1)*77,536,function()
                 if kind=="templates" then self:Tab("templates");return end
                 local block=self:AddBlock(kind)
                 if kind=="cast" and block.rules and block.rules[1] then self:Spell(block.rules[1]) end
-            end,84)
+            end,72,nil,"row")
             S.Card(b,L[starter[3]],starter[4])
         end
         return
     end
-    self:List("actions",self.model.blocks,252,254,536,348,66,58,function(block,index,parent,width,y)
+    self:List("actions",self.model.blocks,252,254,536,addY-254,66,58,function(block,index,parent,width,y)
         local text=C.Block(block,self.catalog)
-        local b=self:Button("action"..index,index..". "..self:BlockTitle(block),0,y,width,function()self.detail=index;self.rule=nil;self:Draw()end,58,parent)
-        local spell=(block.rules or block.steps or {})[1];local info=spell and spell.spellID and W.RadialData.Info(spell.spellID)
-        return S.Card(b,text and S.Code(text) or "|cffff9040"..L["Choose a spell or configure this action."].."|r",info and info.iconID or 134400)
+        local b=self:Button("action"..index,self:BlockTitle(block),0,y,width,function()self.detail=index;self.rule=nil;self:Draw()end,58,parent,"row")
+        return S.Card(b,blockDetail(block,text),blockIcon(block))
     end,self.model.blocks)
 end
 function E:DrawAction()
     local index=self.detail;local block=self.model.blocks[index]
     if self.rule and block.kind=="cast" and block.rules[self.rule] then self:DrawRule(block.rules[self.rule]);return end
-    self:Button("action-back",L["Back to actions"],252,202,260,function()self.detail=nil;self:Draw()end)
-    self:Button("simulate",L["Try a scenario"],528,202,260,function()self:Simulation(block)end)
+    self:Button("action-back",L["Back to actions"],252,211,260,function()self.detail=nil;self:Draw()end)
+    self:Button("simulate",L["Try a scenario"],528,211,260,function()self:Simulation(block)end)
     self:Label(index..". "..L[kinds[block.kind] or "Custom commands"],252,248,536,30)
     if block.kind=="cast" or block.kind=="sequence" then
         local entries=block.kind=="cast" and block.rules or block.steps
@@ -125,7 +150,7 @@ function E:DrawAction()
         self:List("steps",entries,252,388,536,200,52,44,function(entry,n,parent,width,y)
             local b=self:Button("step"..n,n..". "..self:SpellLabel(entry),0,y,width,function()
                 if block.kind=="cast" then self.rule=n;self:Draw() else self:StepOptions(block,n) end
-            end,44,parent)
+            end,44,parent,"row")
             local info=entry.spellID and W.RadialData.Info(entry.spellID)
             return S.Card(b,nil,info and info.iconID or 134400)
         end,entries)
@@ -142,13 +167,13 @@ function E:DrawAction()
         self:Field("argument",block.arg,252,432,536,48,false,function(value)block.arg=value;self:Changed()end)
         self:Label(L["For equipment, enter slot 16 or 17 followed by the item name. Leave other arguments empty when unnecessary."],252,494,536,90)
     end
-    self:Button("move-up",L["Move up"],252,608,172,function()
+    self:Button("move-up",L["Move up"],252,592,172,function()
         if index>1 then self.model.blocks[index],self.model.blocks[index-1]=self.model.blocks[index-1],block;self.detail=index-1;self:Changed();self:Draw()end
     end):SetEnabled(index>1)
-    self:Button("move-down",L["Move down"],434,608,172,function()
+    self:Button("move-down",L["Move down"],434,592,172,function()
         if index<#self.model.blocks then self.model.blocks[index],self.model.blocks[index+1]=self.model.blocks[index+1],block;self.detail=index+1;self:Changed();self:Draw()end
     end):SetEnabled(index<#self.model.blocks)
-    self:Button("remove-action",L["Remove action"],616,608,172,function()table.remove(self.model.blocks,index);self.detail=nil;self.rule=nil;self:Changed();self:Draw()end)
+    self:Button("remove-action",L["Remove action"],616,592,172,function()table.remove(self.model.blocks,index);self.detail=nil;self.rule=nil;self:Changed();self:Draw()end)
 end
 function E:StepOptions(block,index)
     local entry=block.steps[index]
@@ -179,7 +204,7 @@ function E:SequenceSettings(block)
         end}},L["Each successful press advances one step. A failed cast stays on that step. Sequences cannot wait or choose the next ready spell."])
 end
 function E:DrawRule(rule)
-    self:Button("rule-back",L["Back to alternatives"],252,202,536,function()self.rule=nil;self:Draw()end)
+    self:Button("rule-back",L["Back to alternatives"],252,211,536,function()self.rule=nil;self:Draw()end)
     self:Dropdown("rule-spell",self:SpellLabel(rule),252,252,536,function()self:Spell(rule)end,44)
     self:Button("rule-rank",L[rule.ranked and "Rank: selected" or "Rank: highest"],252,314,260,function()rule.ranked=not rule.ranked;self:Changed();self:Draw()end)
     self:Dropdown("rule-target",title(targets,rule.target or "target"),528,314,260,function()self:SelectValue(L["Target"],targets,rule.target,function(v)rule.target=v end)end)

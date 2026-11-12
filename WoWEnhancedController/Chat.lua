@@ -29,6 +29,9 @@ function W.SendQuickMessage(session, message, progress, destination)
     if W.Combat() or W.Blocker() or not W.Contexts.Valid(session) or W.Focus()~=session.target then return end
     local context = session.context
     if not context.chat then return end
+    if message:lower():match("^%s*/reload%s*$") then
+        return pcall(ReloadUI)
+    end
     if destination then
         context = W.Contexts.Destination(destination)
         if not context then return false,W.L["This chat channel is no longer joined."] end

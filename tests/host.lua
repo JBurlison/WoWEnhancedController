@@ -96,6 +96,9 @@ end
 function methods:SetFont(path,height,flags) self.fontFile=path;self.fontHeight=height;self.fontFlags=flags end
 function methods:CopyFontObject(font) self:SetFont(font:GetFont()) end
 function methods:SetFontObject(font) self.fontObject=font end
+function methods:SetTextColor(...) self.textColor={...} end
+function methods:SetShadowOffset(...) self.shadowOffset={...} end
+function methods:SetShadowColor(...) self.shadowColor={...} end
 function methods:SetNormalFontObject(font) self.normalFont=font;if self.label then self.label:SetFontObject(font) end end
 function methods:SetHighlightFontObject(font) self.highlightFont=font end
 function methods:SetDisabledFontObject(font) self.disabledFont=font end

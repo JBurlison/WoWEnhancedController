@@ -2,6 +2,7 @@
 local _, W = ...
 if W.Locale.code ~= "koKR" then return end
 local L = W.L
+L["Actions"] = "행동"
 L["Current chat"] = "현재 대화"
 L["Send to: %s"] = "보낼 곳: %s"
 L["Channel: %s"] = "채널: %s"

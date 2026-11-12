@@ -59,8 +59,11 @@ function E:Focus(id)
     end
     for _,b in ipairs(self.order) do
         local on=b.id==self.selected and self:ControlVisible(b) and self:Eligible() and self.focusRequested == true
-        b.focus:SetShown(on)
-        if b.prompt then W.Theme.Prompt(b,on and {"primary"} or {},"corner") end
+        b.focus:SetShown(on and not b.card)
+        if b.prompt then
+            local hint=on and "primary" or b.shortcut
+            W.Theme.Prompt(b,hint and {hint} or {},"corner")
+        end
         if b.edge then S.Selected(b,on);S.Paint(b) end
     end
     if self.focusButton then W.Theme.FocusBadge(self.focusButton, self.focusKey or W.Input.keys.focus) end
@@ -70,20 +73,19 @@ end
 function E:PaintFooter()
     if not self.footer then return end
     local keys=W.Input.keys
-    local function glyph(action)local atlas=W.Input:Icon(action);return atlas and "|A:"..atlas..":22:22|a" or W.Input:Hint(action)end
-    local parts={glyph("primary").." "..L["Select"]}
+    local function glyph(action)
+        if not keys[action] or keys[action]=="" then return "" end
+        local atlas=W.Input:Icon(action)
+        return atlas and "|A:"..atlas..":30:30|a" or W.Input:Hint(action)
+    end
+    self.leftBumper:SetText(not self.modal and glyph("phrasesLeft") or "")
+    self.rightBumper:SetText(not self.modal and glyph("phrasesRight") or "")
+    local parts={L["Move with D-pad"],glyph("primary").." "..L["Select"]}
     local function add(action,text,gold)
         if (keys[action] or "")~="" then parts[#parts+1]=glyph(action).." "..(gold and "|cffffd100"..text.."|r" or text) end
     end
-    if not self.modal then
-        local listing=self.controls["add-action"]~=nil
-        if listing then add("delete",L["Add action"]) end
-        add("shift",self.bind and self.bind:IsEnabled() and self.bind:GetText() or L["Save macro"],true)
-        add("back",L["Back"])
-        if listing and #self.model.blocks>1 then add("phrases",L["Reorder"],self.reorder~=nil) end
-        add("library",L["More"])
-        if (keys.phrasesLeft or "")~="" and (keys.phrasesRight or "")~="" then parts[#parts+1]=glyph("phrasesLeft").." / "..glyph("phrasesRight").." "..L["Tabs"] end
-    else add("back",L["Back"]) end
+    add("back",L["Back"])
+    if not self.modal and self.controls["add-action"] and #self.model.blocks>1 then add("phrases",L["Reorder"],self.reorder~=nil) end
     self.footer:SetText(table.concat(parts,"    "))
 end
 -- Hold the reorder button and press up or down to move the focused action.
@@ -165,7 +167,7 @@ function E:Acquire(kind)
     local b=pool[n]
     if not b then
         if kind=="label" then b=W.Theme.Label(self.frame,"")
-        elseif kind=="button" or kind=="tab" or kind=="primary" then
+        elseif kind=="button" or kind=="tab" or kind=="primary" or kind=="row" or kind=="icon" then
             b=S.Button(self.frame,kind)
             b:SetScript("OnClick",function() if GetTime()-(W.Input.padAt or -1)<.15 then return end;if b.run then b.run() end end)
         elseif kind=="field" then
@@ -191,18 +193,21 @@ function E:Acquire(kind)
     b:Show();if b.wrapper then b.wrapper:Show() end
     return b
 end
-function E:Label(text,x,y,w,h,parent)
+function E:Label(text,x,y,w,h,parent,tone)
     local b=self:Acquire("label");b:SetParent(parent or self.frame);S.Place(b,x,y,w,h or 28)
-    b:SetFontObject(S.Font("GameFontNormal"));b:SetJustifyH("LEFT");b:SetJustifyV("TOP");b:SetText(text or "");return b
+    b:SetFontObject(S.Font("GameFontNormal",0,tone~="light" and "ink" or nil));b:SetJustifyH("LEFT");b:SetJustifyV("TOP");b:SetText(text or "");return b
 end
 function E:Register(b,id,x,y,w,h)
     b.id=id;b.navX=x+w/2;b.navY=y+h/2;b.navW=w;b.navH=h
     self.controls[id]=b;self.order[#self.order+1]=b
 end
-function E:Button(id,text,x,y,w,run,h,parent)
-    local kind=id:match("^tab%-") and "tab" or (id=="save" or id=="new") and "primary" or "button"
+function E:Button(id,text,x,y,w,run,h,parent,kind)
+    kind=kind or (id:match("^tab%-") and "tab" or (id=="save" or id=="new") and "primary" or "button")
     local b=self:Acquire(kind);b:SetParent(parent or self.frame);S.Place(b,x,y,w,h or 36)
-    b.card=nil;b.detail=nil;b.texture=nil;b.dropdown=nil;b.list=nil;b.listIndex=nil;b:EnableMouseWheel(false);b:SetText(text);S.Paint(b);b:Enable()
+    b.card=nil;b.detail=nil;b.texture=nil;b.dropdown=nil;b.library=nil;b.list=nil;b.listIndex=nil
+    b.shortcut=id=="add-action" and "delete" or id=="more" and "library" or nil
+    if b.selection then b.selection:Hide();b.pointer:Hide();b.iconFrame:Hide() end
+    b:EnableMouseWheel(false);b:SetText(text);S.Paint(b);b:Enable()
     local generation,model,modal=self.generation,self.model,self.modal
     b.run=function()
         if generation~=self.generation or model~=self.model or modal~=self.modal or self.controls[id]~=b or not b:IsEnabled() or not self:ControlVisible(b) or W.Combat() or W.Input.active or (W.IconPicker and W.IconPicker.request) or not self.frame:IsShown() then return end
@@ -408,7 +413,8 @@ function E:DrawChoices()
     self:List("choices",entries,24,180,572,328,48,40,function(entry,i,parent,width,y)
         local b=self:Button("choice"..i,entry.label,0,y,width,function()
             local restore=m.returnID;self.modal=nil;self:Draw();self:Focus(restore);entry.run()
-        end,40,parent)
+        end,40,parent,"row")
+        S.Card(b)
         return entry.dropdown and S.Dropdown(b) or b
     end,m,self.dialog)
     if #entries==0 then self:Label(L["No matches."],24,182,572,40,self.dialog) end
@@ -418,7 +424,7 @@ function E:FocusedBlock()
     if self.modal or self.tab~="build" then return false end
     return self.detail or tonumber((self.selected or ""):match("^action(%d+)$")) or false
 end
--- Mirrors MacroCompiler.Compile line for line; the focused action is gold.
+-- Keep the displayed lines aligned with MacroCompiler and accent the focused action.
 function E:PaintPreview()
     if not self.model or not self.preview then return end
     local focused=self:FocusedBlock();self.previewFocus=focused
@@ -433,11 +439,24 @@ function E:PaintPreview()
     end
     self.preview:SetText(table.concat(lines,"\n"))
     local overflow=false
+    local viewport=self.codeScroll:GetHeight()
+    local needed=viewport
     if self.preview.GetStringHeight then
-        local needed=self.preview:GetStringHeight()+16
-        overflow=needed>self.codeScroll:GetHeight()+1
-        self.preview:SetHeight(math.max(self.codeScroll:GetHeight(),needed))
+        local width=self.codeScroll:GetWidth()
+        self.preview:SetWidth(width-8)
+        needed=self.preview:GetStringHeight()+10
+        overflow=needed>viewport+1
+        if overflow then
+            self.preview:SetWidth(width-26)
+            needed=self.preview:GetStringHeight()+10
+        end
     end
+    local height=math.max(viewport,needed)
+    self.preview:SetHeight(height);self.codeContent:SetHeight(height)
+    self.codeBar:SetShown(overflow)
+    self.codeBar:SetVisibleExtentPercentage(viewport/height)
+    self.codeBar:SetPanExtentPercentage(math.min(1,60/math.max(1,height-viewport)))
+    self:ScrollPreview(0)
     for _,b in ipairs(self.previewButtons or {}) do b:SetShown(overflow);b:SetEnabled(overflow) end
 end
 function E:Preview()
@@ -445,14 +464,14 @@ function E:Preview()
     local body,errors,warnings=C.Compile(self.model,self.catalog)
     self:PaintPreview()
     local count=C.Characters(body)
-    self.counter:SetText((count>255 and "|cffff4040" or "|cffffffff")..L.Format("%d / 255",count).."|r")
+    self.counter:SetText((count>255 and "|cff8b1816" or "|cff45270f")..L.Format("%d / 255",count).."|r")
     self.meterFill:SetWidth(math.max(1,self.meterBack:GetWidth()*math.min(1,count/255)))
     if count>255 then self.meterFill:SetColorTexture(1,.25,.2,1) elseif count>230 then self.meterFill:SetColorTexture(1,.6,.15,1) else self.meterFill:SetColorTexture(1,.82,0,1) end
     local value,err=D.Validate(self.model,self.snapshot,self.catalog)
     local name=self.model.name
     local named=type(name)=="string" and not W.Secret(name) and not name:match("^%s*$") and not name:find('[\r\n|"%z]') and C.Characters(name)<=16
     local complete=body and not body:match("^%s*$") and not (errors and #errors>0)
-    local function check(ok,yes,no) return ok and S.ready..L[yes] or S.notReady.."|cffff9040"..L[no].."|r" end
+    local function check(ok,yes,no) return ok and S.ready..L[yes] or S.notReady.."|cff812b13"..L[no].."|r" end
     self.checks:SetText(check(named,"Name is valid","Name needs 1–16 characters").."\n"
         ..check(count<=255,"Fits in 255 characters","Over 255 characters").."\n"
         ..check(complete,"Actions are complete","Actions need attention"))
@@ -461,59 +480,70 @@ function E:Preview()
         local available=self:NativeBinder()~=nil
         self.bind:SetText(L[not available and "Binding unavailable" or (self.dirty or not self.snapshot) and "Save & bind" or "Bind to toolbar"])
         self.bind:SetEnabled(value~=nil and available)
+        self.bind.shortcut=available and "shift" or nil
+        self.save.shortcut=not available and "shift" or nil
     end
     self.status:SetText(self.message or err or (warnings and warnings[1]) or L["Ready to save. Preview does not execute commands."])
     if self.draftLabel then
-        self.draftLabel:SetText(self.dirty and "|cffff9040"..L["Unsaved changes"].."|r" or self.snapshot and "|cffa5dc94"..L["Saved macro"].."|r" or L["New macro"])
+        self.draftLabel:SetText(self.dirty and L["Unsaved changes"] or self.snapshot and L["Saved macro"] or L["New macro"])
     end
     self:PaintFooter()
 end
 function E:Draw()
     if not self.frame or not self.model then return end
     self:Begin();self.dialog:Hide();self.shade:Hide();self.preview=nil;self.status=nil;self.counter=nil;self.save=nil;self.checks=nil;self.previewButtons=nil
-    self:Label(L["Macro creator"],24,14,500,38):SetFontObject(S.Font("GameFontNormal",8))
-    self:Label("Enhanced Controller",550,24,350,28):SetFontObject(S.Font("GameFontHighlight",-3))
+    local header=self:Label(L["Macro creator"],100,7,900,31,nil,"light")
+    header:SetFontObject(S.Font("GameFontNormal",6));header:SetJustifyH("CENTER");header:SetJustifyV("MIDDLE")
     self:Register(self.closeButton,"close",1080,0,20,22)
     self:Register(self.focusButton,"focus",536,670,28,29)
-    self:Label(L["Macro library"],24,66,204)
-    self:Button("scope",L[self.scope=="account" and "Account macros" or "Character macros"],24,100,204,function()self:New(self.scope=="account" and "character" or "account")end)
-    self:Button("new",L["New macro"],24,144,204,function()self:New()end)
+    self:Label(L["Macro library"],24,97,204,30,nil,"light"):SetFontObject(S.Font("GameFontHighlight",4))
+    self:Dropdown("scope",L[self.scope=="account" and "Account macros" or "Character macros"],19,135,208,function()
+        self:Choose(L["Macro library"],{{label=L["Account macros"],run=function() if self.scope~="account" then self:New("account") end end},
+            {label=L["Character macros"],run=function() if self.scope~="character" then self:New("character") end end}})
+    end)
+    self:Button("new",L["New macro"],24,581,196,function()self:New()end)
     local list,err=D.List(self.scope)
-    self:List("library",list,24,192,204,408,52,44,function(entry,i,parent,width,y)
-        local b=self:Button("macro:"..entry.index,W.Escape(entry.name),0,y,width,function()self:Load(entry)end,44,parent)
-        S.Card(b,nil,entry.displayIcon);if self.snapshot and self.snapshot.name==entry.name then S.Selected(b,true) end
+    self:List("library",list,10,181,221,389,52,44,function(entry,i,parent,width,y)
+        local b=self:Button("macro:"..entry.index,W.Escape(entry.name),0,y,width,function()self:Load(entry)end,44,parent,"row")
+        S.Card(b,nil,entry.displayIcon,true)
+        local saved=self.snapshot
+        b.selection:SetShown(saved and saved.scope==entry.scope and saved.name==entry.name and saved.body==entry.body and saved.icon==entry.icon)
         return b
     end,self.scope)
-    if #list==0 then self:Label(err or L["No macros in this scope."],24,202,204,90) end
-    self:Label(L["Macro name"],330,64,250,26)
-    self.counter=self:Label("",588,64,200,26);self.counter:SetJustifyH("RIGHT")
-    S.Place(self.meterBack,330,138,458,5);S.Place(self.meterFill,330,138,458,5)
-    self:Field("name",self.model.name,330,92,458,42,false,function(value)self.model.name=value;self:Changed()end)
-    local iconButton=self:Button("icon","",252,68,64,function()
+    if #list==0 then self:Label(err or L["No macros in this scope."],24,197,196,90,nil,"light"):SetFontObject(S.Font("GameFontHighlight",-1)) end
+    self:Label(L["Macro name"],330,88,450,26)
+    self.counter=self:Label("",812,418,264,23)
+    S.Place(self.meterBack,812,447,254,4);S.Place(self.meterFill,812,447,254,4)
+    self:Field("name",self.model.name,330,115,458,40,false,function(value)self.model.name=value;self:Changed()end)
+    local iconButton=self:Button("icon","",252,91,64,function()
         self:ClearFields();local model=self.model
         local opened=W.IconPicker:Open({owner=self.frame,selectedIcon=model.icon,onSelect=function(icon)
             if self.model==model then model.icon=icon;self:Changed();self:Draw() end
         end,restoreFocus=function()self.shade:Hide();if self.frame:IsShown()then self:SyncControls();self:Focus("icon")end end})
         if opened then self.shade:Show();self:SyncControls() end
-    end,66)
+    end,66,nil,"icon")
     self.icon:SetParent(iconButton);self.icon:ClearAllPoints();self.icon:SetPoint("CENTER");self.icon:SetTexture(self.model.icon or 134400);self.icon:Show()
+    self.iconRim:SetParent(iconButton);self.iconRim:ClearAllPoints();self.iconRim:SetPoint("CENTER",self.icon,"CENTER")
     for i,tab in ipairs({{"build","Visual builder"},{"commands","Commands"},{"templates","Templates"}}) do
-        local b=self:Button("tab-"..tab[1],L[tab[2]],252+(i-1)*180,148,172,function()self:Tab(tab[1])end)
+        local b=self:Button("tab-"..tab[1],L[tab[2]],278+(i-1)*182,42,178,function()self:Tab(tab[1])end)
         W.Theme.Tab(b,self.tab==tab[1])
     end
-    self.draftLabel=self:Label("",812,64,264,26)
-    self.bind=self:Button("bind",L["Bind to toolbar"],812,100,264,function()self:Bind()end)
-    self:Label(L["Live command preview"],812,156,264,28)
-    self.preview=self.codeText;self.codeScroll:Show();self.preview:SetFontObject(S.Font("GameFontHighlight",-2));self.codeScroll:SetVerticalScroll(0)
+    self.leftBumper=self:Label("",235,51,40,24,nil,"light");self.leftBumper:SetJustifyH("RIGHT")
+    self.rightBumper=self:Label("",830,51,48,24,nil,"light")
+    self.draftLabel=self:Label("",812,120,264,32)
+    self:Label(L[self.tab=="build" and "Actions" or self.tab=="commands" and "Commands" or "Templates"],252,176,536,28):SetFontObject(S.Font("GameFontNormal",3,"ink"))
+    self:Label(L["Live command preview"],812,176,264,42):SetFontObject(S.Font("GameFontNormal",3,"ink"))
+    self.preview=self.codeText;self.codeScroll:Show();self.preview:SetFontObject(S.Font("GameFontHighlight",-1,"ink"));self.codeScroll:SetVerticalScroll(0)
     -- Scroll buttons join the focus graph only while the preview overflows.
-    self.previewButtons={self:Button("preview-up",L["Up"],812,432,124,function()self:ScrollPreview(-120)end,28),
-        self:Button("preview-down",L["Down"],952,432,124,function()self:ScrollPreview(120)end,28)}
-    self.checks=self:Label("",812,466,264,72);self.checks:SetFontObject(S.Font("GameFontHighlight",-2))
-    self.status=self:Label("",812,540,264,56);self.status:SetFontObject(S.Font("GameFontHighlight",-3))
-    self.save=self:Button("save",L["Save macro"],812,608,154,function()self:Save()end)
-    self:Button("more",L["More"],978,608,98,function()self:More()end)
+    self.previewButtons={self:Button("preview-up",L["Up"],812,380,124,function()self:ScrollPreview(-120)end,28),
+        self:Button("preview-down",L["Down"],952,380,124,function()self:ScrollPreview(120)end,28)}
+    self.checks=self:Label("",812,463,264,76);self.checks:SetFontObject(S.Font("GameFontHighlight",-2,"ink"))
+    self.status=self:Label("",812,547,264,74);self.status:SetFontObject(S.Font("GameFontHighlight",-2,"secondary"))
+    self.save=self:Button("save",L["Save macro"],580,639,150,function()self:Save()end)
+    self.bind=self:Button("bind",L["Bind to toolbar"],737,639,193,function()self:Bind()end)
+    self:Dropdown("more",L["More"],937,639,144,function()self:More()end)
     if self.tab=="commands" then
-        self:Label(L["Editing commands preserves your text exactly. Visual actions stay as custom commands until you replace them."],252,198,536,66)
+        self:Label(L["Editing commands preserves your text exactly. Visual actions stay as custom commands until you replace them."],252,213,536,56)
         local body=C.Compile(self.model,self.catalog)
         self:Field("commands",body,252,272,536,278,true,function(value)self.model.raw=value;self:Changed()end)
         self:Button("commands-builder",L["Keep text as an action"],252,564,536,function()
@@ -526,7 +556,7 @@ function E:Draw()
             self.model.blocks={{kind="raw",text=self.model.raw}};self.model.raw=nil;self.model.tooltip=false;self:Changed();self:Draw()
         end)
     else self:DrawBuilder() end
-    self.footer=self:Label("",24,646,1052,28);self.footer:SetFontObject(S.Font("GameFontHighlight",-2))
+    self.footer=self:Label("",18,635,552,45,nil,"light");self.footer:SetFontObject(S.Font("GameFontHighlight",-3));self.footer:SetJustifyV("MIDDLE")
     self:Preview()
     if self.modal then
         self.shade:Show()
@@ -563,18 +593,25 @@ function E:Create()
     self.focusButton=W.Theme.Button(f,"",function()if not self.modal then self:RequestFocus()end end)
     self.focusButton:SetPoint("CENTER",f,"BOTTOM",0,4);self.focusButton:SetSize(32,32);self.focusButton:SetFrameLevel(f:GetFrameLevel()+2)
     self.focusButton.run=function()if not self.modal then self:RequestFocus()end end
-    self.panels={}
-    for _,r in ipairs({{16,60,220,580},{240,188,560,454},{800,144,284,454}})do local panel=S.Panel(f);S.Place(panel,unpack(r));panel:SetFrameLevel(f:GetFrameLevel());self.panels[#self.panels+1]=panel end
+    S.Folio(f)
     self.meterBack=f:CreateTexture(nil,"ARTWORK");self.meterBack:SetColorTexture(.2,.2,.16,1)
     self.meterFill=f:CreateTexture(nil,"OVERLAY");self.meterFill:SetColorTexture(1,.82,0,1)
     self.icon=f:CreateTexture(nil,"OVERLAY");self.icon:SetPoint("TOPLEFT",261*S.x,-77*S.y);self.icon:SetSize(46*S.x,46*S.y)
-    self.codeScroll=CreateFrame("ScrollFrame",nil,f);S.Place(self.codeScroll,812,190,264,236);self.codeScroll:SetClipsChildren(true)
-    local code=CreateFrame("Frame",nil,self.codeScroll);code:SetSize(264*S.x,1000);self.codeScroll:SetScrollChild(code)
+    self.iconRim=f:CreateTexture(nil,"OVERLAY",nil,1);self.iconRim:SetTexture("Interface\\Buttons\\UI-Quickslot2");self.iconRim:SetSize(78*S.x,78*S.y)
+    self.codeScroll=CreateFrame("ScrollFrame",nil,f);S.Place(self.codeScroll,812,224,264,150);self.codeScroll:SetClipsChildren(true)
+    local code=CreateFrame("Frame",nil,self.codeScroll);self.codeContent=code;code:SetSize(264*S.x,1000);self.codeScroll:SetScrollChild(code)
     self.codeText=W.Theme.Label(code,"");self.codeText:SetPoint("TOPLEFT");self.codeText:SetWidth(264*S.x-8);self.codeText:SetHeight(1000);self.codeText:SetJustifyH("LEFT");self.codeText:SetJustifyV("TOP")
     self.codeScroll:EnableMouseWheel(true);self.codeScroll:SetScript("OnMouseWheel",function(_,delta)self:ScrollPreview(-delta*60)end)
+    self.codeBar=CreateFrame("EventFrame",nil,f,"MinimalScrollBar")
+    self.codeBar:SetPoint("TOPRIGHT",self.codeScroll,"TOPRIGHT");self.codeBar:SetHeight(self.codeScroll:GetHeight());self.codeBar:Init(1,1)
+    self.codeBar:RegisterCallback(ScrollBarMixin.Event.OnScroll,function(_,fraction)
+        if self.preview and not self.modal and self:Eligible() then
+            self.codeScroll:SetVerticalScroll(fraction*math.max(0,self.preview:GetHeight()-self.codeScroll:GetHeight()))
+        end
+    end,self)
     self.shade=CreateFrame("Frame",nil,f);self.shade:SetAllPoints();self.shade:SetFrameLevel(f:GetFrameLevel()+8);self.shade:EnableMouse(true)
     local dim=self.shade:CreateTexture(nil,"BACKGROUND");dim:SetAllPoints();dim:SetColorTexture(0,0,0,.7);self.shade:Hide()
-    local dialog=CreateFrame("Frame",nil,f);self.dialog=dialog;dialog:SetSize(620*S.x,584*S.y);dialog:SetPoint("CENTER");dialog:SetFrameLevel(f:GetFrameLevel()+20);dialog:EnableMouse(true);W.Theme.Shell(dialog);dialog:Hide()
+    local dialog=CreateFrame("Frame",nil,f);self.dialog=dialog;dialog:SetSize(620*S.x,584*S.y);dialog:SetPoint("CENTER");dialog:SetFrameLevel(f:GetFrameLevel()+20);dialog:EnableMouse(true);W.Theme.Shell(dialog);S.Dialog(dialog);dialog:Hide()
     -- Do not put the parent in UISpecialFrames: Escape must visit the draft guard.
     f:EnableKeyboard(true);f:SetPropagateKeyboardInput(true)
     f:SetScript("OnKeyDown",function(_,key)
@@ -584,6 +621,7 @@ function E:Create()
     end)
     f:SetScript("OnHide",function()
         W.ReleaseMenuControls(self);self:ClearFields();self.modal=nil;self.reorder=nil
+        self.codeBar:UnregisterUpdate()
         for _,list in pairs(self.listFrames or {}) do list.bar:UnregisterUpdate() end
         if W.IconPicker and W.IconPicker.request and W.IconPicker.request.owner==f then W.IconPicker:Close() end
         if W.Radial then W.Radial:SyncOwnership() end
@@ -616,6 +654,8 @@ function E:Create()
     W.Keyboard.frame:HookScript("OnHide",function() self:SyncControls() end)
 end
 function E:ScrollPreview(delta)
-    local height=self.preview:GetHeight()
-    self.codeScroll:SetVerticalScroll(W.Clamp(self.codeScroll:GetVerticalScroll()+delta,0,math.max(0,height-self.codeScroll:GetHeight())))
+    local maximum=math.max(0,self.preview:GetHeight()-self.codeScroll:GetHeight())
+    local offset=W.Clamp(self.codeScroll:GetVerticalScroll()+delta,0,maximum)
+    self.codeScroll:SetVerticalScroll(offset)
+    self.codeBar:SetScrollPercentage(maximum>0 and offset/maximum or 0,true)
 end

@@ -2,6 +2,7 @@
 local _, W = ...
 if W.Locale.code ~= "zhCN" then return end
 local L = W.L
+L["Actions"] = "动作"
 L["Current chat"] = "当前聊天"
 L["Send to: %s"] = "发送到：%s"
 L["Channel: %s"] = "频道：%s"
