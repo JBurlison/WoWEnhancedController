@@ -178,7 +178,7 @@ python tools/validate-package.py
 
 The validator checks the TOC, binding headers, artwork format and exact ZIP contents, then writes `dist/manifest.json` with SHA-256 hashes. Generated packages, local caches and private design evidence are excluded from Git.
 
-The shipped branding assets are ready to use. Regenerating their size/format exports with `python tools/export-branding.py` additionally requires Pillow (`python -m pip install Pillow`).
+For the CurseForge project logo, upload [controller-400.png](branding/exports/controller-400.png), the transparent 400×400 controller crest. The [branding guide](branding/README.md) lists the matching suite mark and game texture. To regenerate the exports, install Pillow (`python -m pip install Pillow`) and run `python tools/export-branding.py`.
 The radial geometry exports are reproducible with `python tools/export-radial-art.py` using Pillow; labels, hit regions, spell/class art and controller prompts are separate native widgets.
 
 Version 0.4.0 adds the Settings wheel preview and spell/macro pickers. Picker/draft tests cover active learned spells, known flyouts, rank IDs, macro scope and slot shifts, search/paging, controller callbacks, UTF-8 labels, explicit saves and legacy/custom macros. UIForever checks and installation evidence are recorded in the task matrix.

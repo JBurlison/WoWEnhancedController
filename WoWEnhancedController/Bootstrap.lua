@@ -185,8 +185,23 @@ eventFrame:SetScript("OnEvent", function(_, event, ...)
             W.Input.handlingBlockedAction = true
             local previous, now = W.Input.blockedAction, GetTime()
             local blocked = { func = tostring(func), stage = W.Input.releaseStage,
-                stack = debugstack and debugstack(2, 12, 8), at = now }
+                stack = debugstack and debugstack(2, 20, 12), at = now }
             W.Input.blockedAction = blocked
+            -- Keep the last few reports across /reload so the native caller
+            -- and the addon operation that reached it can be read afterwards.
+            if W.db and (not previous or previous.func ~= blocked.func or now - previous.at >= 5) then
+                local log = W.db.blockedLog or {}
+                W.db.blockedLog = log
+                local focus = W.Focus()
+                log[#log + 1] = { func = blocked.func, stage = blocked.stage, stack = blocked.stack,
+                    when = date and date("%Y-%m-%d %H:%M:%S") or tostring(now), version = W.version,
+                    controller = W.ControllerMode() and true or false, capture = W.Input.active and true or false,
+                    keyboard = W.Keyboard.frame and W.Keyboard.frame:IsShown() and true or false,
+                    launcher = W.Launcher and W.Launcher:IsShown() and true or false,
+                    macros = W.MacroEditor and W.MacroEditor.frame and W.MacroEditor.frame:IsShown() and true or false,
+                    focus = focus and W.Call(focus, "GetName") or nil }
+                while #log > 5 do table.remove(log, 1) end
+            end
             W.Input.failure = W.L.Format("WoW blocked %s. Controller capture suspended; /wec diag reports state.", tostring(func))
             if W.Input.active then W.Input:Release() end
             if not previous or previous.func ~= blocked.func or now - previous.at >= 5 then W.Print(W.Input.failure) end
