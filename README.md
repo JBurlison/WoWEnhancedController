@@ -4,7 +4,7 @@ A controller keyboard, macro creator and party/raid spell wheel for **WoW Foreve
 
 ## Install
 
-Extract `dist/WoWEnhancedController-0.20.2-forever.zip` into the Forever client's `Interface/AddOns` folder. To create the ZIP from a checkout, follow the build instructions below. The resulting file is `Interface/AddOns/WoWEnhancedController/WoWEnhancedController.toc`. Use `/reload` after updating. Restart WoW when upgrading from the older keyboard-only releases to load the radial files. If CompactKeyboard is installed, disable one of the two keyboards before reloading; this addon detects the conflict without disabling other addons or changing saved bindings/CVars.
+Extract the Forever ZIP from [GitHub Releases](https://github.com/JBurlison/WoWEnhancedController/releases) into the Forever client's `Interface/AddOns` folder. To create the ZIP from a checkout, follow the build instructions below. The resulting file is `Interface/AddOns/WoWEnhancedController/WoWEnhancedController.toc`. Use `/reload` after updating. Restart WoW when upgrading from the older keyboard-only releases to load the radial files. If CompactKeyboard is installed, disable one of the two keyboards before reloading; this addon detects the conflict without disabling other addons or changing saved bindings/CVars.
 
 Version 0.15.0 routes keyboard controller buttons through temporary bindings, including trigger-modified combinations, to prevent the same press reaching gameplay while typing. Closing the keyboard, losing focus or entering combat releases its bindings; a held button is swallowed until release. Saved bindings are unchanged. All 175 automated checks pass, and UIForever verifies binding ownership and cleanup without Lua errors. The reported casting leak still needs a physical-controller retest in the current client. See the [binding audit](docs/plans/minimap-launcher/KEYBOARD-BINDING-OWNERSHIP.md).
 
@@ -178,7 +178,9 @@ python tools/validate-package.py
 
 The validator checks the TOC, binding headers, artwork format and exact ZIP contents, then writes `dist/manifest.json` with SHA-256 hashes. Generated packages, local caches and private design evidence are excluded from Git.
 
-The shipped branding assets are ready to use. Regenerating their size/format exports with `python tools/export-branding.py` additionally requires Pillow (`python -m pip install Pillow`).
+To release a new version, update `## Version` in the TOC and `W.version` in `Namespace.lua` to the same, higher `MAJOR.MINOR.PATCH` and open a PR to `main`. The **Addon release** check tests the addon and attaches the validated Forever ZIP and its checksum to the workflow run. When the version bump reaches `main`, GitHub Actions tests and builds that commit, pushes its `v<version>` tag, and publishes the GitHub Release. The tag push triggers [CurseForge project 1800162](https://www.curseforge.com/wow/addons/enhanced-controller) to package the addon for distribution.
+
+For the CurseForge project logo, upload [controller-400.png](branding/exports/controller-400.png), the transparent 400×400 controller crest. The [branding guide](branding/README.md) lists the matching suite mark and game texture. To regenerate the exports, install Pillow (`python -m pip install Pillow`) and run `python tools/export-branding.py`.
 The radial geometry exports are reproducible with `python tools/export-radial-art.py` using Pillow; labels, hit regions, spell/class art and controller prompts are separate native widgets.
 
 Version 0.4.0 adds the Settings wheel preview and spell/macro pickers. Picker/draft tests cover active learned spells, known flyouts, rank IDs, macro scope and slot shifts, search/paging, controller callbacks, UTF-8 labels, explicit saves and legacy/custom macros. UIForever checks and installation evidence are recorded in the task matrix.

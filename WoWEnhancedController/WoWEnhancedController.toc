@@ -14,7 +14,8 @@
 ## Notes-zhTW: 為 WoW Forever 提供控制器鍵盤、情境片語及隊伍／團隊法術輪盤。
 ## Notes-esMX: Teclado para mando, frases contextuales y ruedas de hechizos de grupo/banda para WoW Forever.
 ## Author: JBurlison
-## Version: 0.20.2
+## Version: 1.0.0
+## X-Curse-Project-ID: 1800162
 ## SavedVariables: WoWEnhancedControllerDB
 ## OptionalDeps: Blizzard_EditMode, Blizzard_AuctionHouseUI, Blizzard_Professions, Blizzard_MailFrame, Blizzard_RestrictedAddOnEnvironment, Blizzard_Settings_Shared
 Namespace.lua
