@@ -26,7 +26,7 @@ Choose **Link in chat** to share an item, recipe, or quest. Selecting a quest ti
 
 ## Use the party and raid wheel
 
-When you're solo, the wheel opens directly on your spells with you as the recipient. Point at a spell and confirm to cast it on yourself. Back closes the wheel.
+With either healing mode, playing solo opens the wheel directly on your spells. Point at a spell and confirm to cast it on yourself. Back closes the wheel.
 
 In a party or raid, use the default **Hold & sweep** controls:
 
@@ -34,9 +34,13 @@ In a party or raid, use the default **Hold & sweep** controls:
 2. Point the right stick at an ally and hold the left trigger to select them. The wheel shows health and debuffs you can dispel.
 3. While holding the trigger, point at a spell. Release to cast on that ally, or release over the center to cancel.
 
-You can keep moving with the left stick in either wheel mode. The right stick aims the wheel while it’s open and controls the camera again when it closes.
+You can keep moving with the left stick while any wheel is open. The right stick aims the wheel and controls the camera again when it closes.
 
 Use the shoulder buttons to switch spell pages. If you prefer to confirm the ally and spell separately, choose **Classic** under **Healing wheel behavior** in settings. Open **Wheel spells / macros** to add learned spells or saved macros, arrange their slots, and save your layout.
+
+Choose **Target only** under **Healing wheel behavior** to use the wheel for quick targeting. Press the wheel shortcut while solo to target yourself immediately. In a party, point at a member and let the stick return to center. In a raid, choose a group first, then a member. The wheel closes as soon as you select your target.
+
+To keep a healing mode on your usual shortcut, bind **Open targeting wheel** to a second button or use `/click WoWEnhancedControllerWheelTarget` in a macro. If you open Target only from the launcher or `/wecwheel` while solo, press confirm once to select yourself.
 
 ## Macros, minimap buttons, and inventory
 

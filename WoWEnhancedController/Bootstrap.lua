@@ -236,6 +236,7 @@ end)
 BINDING_HEADER_WOWENHANCEDCONTROLLER = "Enhanced Controller"
 _G["BINDING_NAME_CLICK WoWEnhancedControllerWheelInput:Classic"] = W.L["Open classic healing wheel"]
 _G["BINDING_NAME_CLICK WoWEnhancedControllerWheelInput:Sweep"] = W.L["Open hold & sweep healing wheel"]
+_G["BINDING_NAME_CLICK WoWEnhancedControllerWheelInput:Target"] = W.L["Open targeting wheel"]
 BINDING_NAME_WEC_OPEN = W.L["Open controller keyboard / options"]
 BINDING_NAME_WEC_FOCUS = W.L["Focus controller keyboard"]
 BINDING_NAME_WEC_MENU = W.L["Open Enhanced Controller launcher"]

@@ -156,15 +156,13 @@ function R:Init()
     dispatch:SetSize(1, 1); dispatch:SetPoint("TOPLEFT"); dispatch:SetAlpha(0); dispatch:EnableMouse(false)
     self.dispatch = dispatch; frame:SetFrameRef("dispatch", dispatch)
     W.RadialSecure.Attach(dispatch, frame)
-    local macroToggle = CreateFrame("Button", "WoWEnhancedControllerWheelToggle", UIParent, "SecureActionButtonTemplate")
-    macroToggle:SetSize(1, 1); macroToggle:SetPoint("TOPLEFT"); macroToggle:SetAlpha(0); macroToggle:EnableMouse(false)
-    macroToggle:SetAttribute("command", "ToggleMacro")
-    W.RadialSecure.Attach(macroToggle, frame)
-    self.macroToggle = macroToggle
-    for _, mode in ipairs({"Classic", "Sweep"}) do
+    for _, mode in ipairs({"Toggle", "Classic", "Sweep", "Target"}) do
         local opener = CreateFrame("Button", "WoWEnhancedControllerWheel" .. mode, UIParent, "SecureActionButtonTemplate")
         opener:SetSize(1, 1); opener:SetPoint("TOPLEFT"); opener:SetAlpha(0); opener:EnableMouse(false)
-        opener:SetAttribute("command", mode .. "Macro")
+        opener:SetAttribute("command", mode)
+        opener:SetAttribute("macro-opener", true)
+        if mode == "Toggle" then self.macroToggle = opener
+        else frame:SetAttribute("open-mode-" .. mode, mode:lower()) end
         W.RadialSecure.Attach(opener, frame)
     end
     self:CreateSweep(frame)

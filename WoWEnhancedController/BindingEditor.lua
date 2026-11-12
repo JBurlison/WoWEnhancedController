@@ -161,8 +161,8 @@ function O.PaintBindings(message,keepOffset)
     local hint=O.bindingCapture and (f.column==1 and L["Press a keyboard key. Escape cancels."] or L["Press a gamepad button. Escape cancels."])
     if not hint and f.lastAction then
         local id=f.lastAction.data[1]
-        if id=="CLICK WoWEnhancedControllerWheelInput:Classic" then hint="/click WoWEnhancedControllerWheelClassic"
-        elseif id=="CLICK WoWEnhancedControllerWheelInput:Sweep" then hint="/click WoWEnhancedControllerWheelSweep"
+        local wheelMode=id:match("^CLICK WoWEnhancedControllerWheelInput:(%a+)$")
+        if wheelMode then hint="/click WoWEnhancedControllerWheel"..wheelMode
         else hint=L[f.lastAction.section.description] end
     end
     f.status:SetText(message or hint or L["Select a binding to change it."])

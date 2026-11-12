@@ -17,6 +17,63 @@ class SweepTests(unittest.TestCase):
     def run_lua(self, source):
         self.env.run_lua(source)
 
+    def test_solo_target_from_binding_or_macro_immediately_selects_self(self):
+        self.run_lua('''
+            for i=1,4 do HOST.units["party"..i]=nil end
+            R:Rebuild()
+            HOST.settings.WEC_RADIAL_behavior:SetValue("target")
+            W.RadialData.Init()
+            assert(W.db.radial.behavior=="target")
+            HOST.combat=true
+            edge("Toggle",true)
+            assert(#HOST.actions==0 and not f:IsShown())
+            edge("Toggle",false);edge("Toggle",false)
+            assert(#HOST.actions==1 and HOST.actions[1].kind=="target" and UnitName("target")=="You")
+            assert(not f:IsShown() and not next(f.binds))
+            macro("Classic");assert(f:GetAttribute("stage")=="spells")
+            macro("Target");assert(not f:IsShown() and #HOST.actions==2 and HOST.actions[2].unit=="player")
+            macro("Toggle");assert(#HOST.actions==3 and not f:IsShown())
+            f:RunAttribute("op-invalidate");macro("Target");assert(#HOST.actions==3)
+            HOST.combat=false;R:Rebuild()
+            R:Open();assert(f:IsShown() and f:GetAttribute("selected")==1)
+            HOST.WheelPress("Confirm");assert(#HOST.actions==4 and not f:IsShown())
+            W.db.radial.enabled=false;R:SyncOwnership();macro("Target");assert(#HOST.actions==4)
+        ''')
+
+    def test_party_target_stick_release_selects_once_and_closes(self):
+        self.run_lua('''
+            HOST.combat=true;HOST.WheelPress("Target")
+            assert(f:GetAttribute("stage")=="root" and f:GetAttribute("count")==5)
+            assert(not R.sweepSurface:IsShown() and R.selectLabel:GetText()=="Target")
+            HOST.StickEdge("PADRSTICKRIGHT",true,1,0)
+            assert(#HOST.actions==0 and UnitName("target")=="Stoneguard")
+            HOST.StickEdge("PADRSTICKRIGHT",false,0,0)
+            edge("PADRSTICKRIGHT",false)
+            assert(#HOST.actions==1 and HOST.actions[1].kind=="target" and HOST.actions[1].unit=="party2")
+            assert(UnitName("target")=="Thorne" and not f:IsShown() and not next(f.binds))
+            macro("Target");HOST.WheelPress("Back");assert(#HOST.actions==1 and not f:IsShown())
+            macro("Target");HOST.units.party1=nil;HOST.WheelPress("LeftButton",2)
+            assert(#HOST.actions==1 and f:IsShown())
+            f:RunAttribute("op-invalidate");edge("Confirm",false)
+            assert(#HOST.actions==1 and W.db.radial.behavior=="sweep")
+        ''')
+
+    def test_raid_target_keeps_group_selection_and_back_then_targets_member(self):
+        self.run_lua('''
+            HOST.Raid()
+            for i=6,10 do HOST.units["raid"..i]=nil end
+            R:Rebuild();HOST.combat=true;macro("Target")
+            assert(f:GetAttribute("stage")=="root" and R.selectLabel:GetText()=="Select")
+            HOST.WheelPress("LeftButton",2);assert(f:GetAttribute("stage")=="root")
+            HOST.WheelPress("LeftButton",3)
+            assert(#HOST.actions==0 and f:GetAttribute("stage")=="members" and f:GetAttribute("count")==5)
+            HOST.WheelPress("BackDpad");assert(f:GetAttribute("stage")=="root" and #HOST.actions==0)
+            HOST.WheelPress("LeftButton",3)
+            HOST.WheelPress("LeftButton",4)
+            assert(#HOST.actions==1 and HOST.actions[1].kind=="target" and HOST.actions[1].unit=="raid14")
+            assert(UnitName("target")=="Member14" and not f:IsShown())
+        ''')
+
     def test_movement_during_trigger_hold_and_camera_handoff(self):
         self.run_lua('''
             assert(not f:IsGamePadStickEnabled() and not f:GetScript("OnGamepadStick"))

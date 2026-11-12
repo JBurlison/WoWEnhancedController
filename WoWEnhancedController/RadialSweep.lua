@@ -82,7 +82,8 @@ function R:PaintSweep(stage, member, page)
     local diameter = W.db.radial.size * (dual and 1.16 or 1)
     if self.ring:GetWidth()~=diameter then self.ring:SetSize(diameter,diameter) end
     layer:SetShown(dual)
-    self.selectLabel:SetText(W.L["Select"])
+    local choosingTarget = f:GetAttribute("mode") == "target" and (stage == "members" or not self.snapshot.raid)
+    self.selectLabel:SetText(choosingTarget and W.L["Target"] or W.L["Select"])
     for _,region in ipairs({self.center,self.centerHealth}) do region:SetShown(not dual) end
     if not dual then return end
     self.centerBar:Hide(); self.highlight:Hide()

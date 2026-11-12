@@ -17,4 +17,5 @@
     <Binding name="CLICK WoWEnhancedControllerWheelInput:Toggle" />
     <Binding name="CLICK WoWEnhancedControllerWheelInput:Classic" />
     <Binding name="CLICK WoWEnhancedControllerWheelInput:Sweep" />
+    <Binding name="CLICK WoWEnhancedControllerWheelInput:Target" />
 </Bindings>
