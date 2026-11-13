@@ -89,6 +89,7 @@ class LanguageInputTests(unittest.TestCase):
                 env.lua.globals().mode=mode
                 env.run_lua("""
                     chat("draft");letters(spelling);assert(box:GetText()=="draft" and #HOST.sent==0)
+                    assert(W.Locale.Characters(W.Mandarin.hao)[1]=="好")
                     local start=k.preedit.candidates[1];press("›");assert(k.preedit.page==2);press("‹");assert(k.preedit.page==1)
                     local page=1
                     while not findKey(word) and page<=8 do press("›");page=page+1 end

@@ -62,7 +62,9 @@ def generate(archive):
     indexes = {locale: collections.defaultdict(list) for locale in ("zhCN", "zhTW")}
     freq = {}
     for ch, row in records.items():
-        freq[ch] = {normalize(r): int(n) for r, n in re.findall(r"([^ ()]+)\((\d+)\)", row.get("kHanyuPinlu", ""))}
+        freq[ch] = collections.Counter()
+        for reading, count in re.findall(r"([^ ()]+)\((\d+)\)", row.get("kHanyuPinlu", "")):
+            freq[ch][normalize(reading)] += int(count)
     for ch, row in records.items():
         readings = set(freq[ch]) | {normalize(r) for r in row.get("kMandarin", "").split()}
         for field in ("kHanyuPinyin", "kXHC1983"):
