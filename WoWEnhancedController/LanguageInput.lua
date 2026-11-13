@@ -49,24 +49,49 @@ local function fits(e, a, b, value)
     local text = e.text:sub(1, a) .. value .. e.text:sub(b + 1)
     return W.Text.Limit(text, e.options.maxBytes, e.options.maxLetters) == text
 end
+-- A native field owns its cursor units. Measure the first inserted jamo and
+-- keep both the field range and its UTF-8 byte range for the unfinished block.
+local function characterOffset(text, index)
+    return W.Text.Boundaries(text)[index+1]
+end
 local function hangulEdit(k, key)
-    local e, state = k.editor, k:CurrentPreedit() or {keys={}}
+    local e = k.editor
+    local state = k:CurrentPreedit() or {keys={}}
     if W.Focus() ~= k:InputOwner() or (k.session and not W.Contexts.Valid(k.session)) then return end
     local keys = W.Copy(state.keys)
     if key then keys[#keys+1] = key else table.remove(keys) end
     local completed, remaining, active = W.Hangul.Compose(keys)
     local replacement = completed .. active
-    local a = state.active and e.cursor - #state.active or math.min(e.cursor, e.anchor)
-    local b = math.max(e.cursor, e.anchor)
+    local start = state.fieldStart or math.min(e.cursor, e.anchor)
+    local finish = math.max(e.cursor, e.anchor)
+    local before = e.text
+    local a, b = state.byteStart or start, state.byteStart and state.byteStart + #state.active or finish
     if not fits(e, a, b, replacement) then return end
+
     if state.active then
-        e:Select(a, b)
+        -- Only the unfinished syllable changes. A vowel may also move its
+        -- final consonant to a new block, leaving the rest of the field intact.
+        e:Remember()
+        e.text = before:sub(1,a) .. replacement .. before:sub(b+1)
+        local count = (completed ~= "" and 1 or 0) + (active ~= "" and 1 or 0)
+        local caret = start + count * state.fieldWidth
+        e:Select(caret, caret)
+        if k.session and not k.composing then k.session.appliedCursor = nil end
         k:Sync()
+        k.preedit = nil
+        if e.text ~= before:sub(1,a) .. replacement .. before:sub(b+1) then return end
+    else
+        k:Insert(replacement)
+        state.fieldWidth = e.cursor - start
+        if state.fieldWidth == 1 and not k.composing then
+            a, b = characterOffset(before, start), characterOffset(before, finish)
+        end
+        if not a or not b or e.text ~= before:sub(1,a) .. replacement .. before:sub(b+1) then return end
+        if state.fieldWidth ~= #active and state.fieldWidth ~= 1 then return end
     end
-    local expected = e.text:sub(1, a) .. replacement .. e.text:sub(b + 1)
-    k:Insert(replacement)
-    if active ~= "" and e.text == expected and e.cursor == a + #replacement then
+    if active ~= "" then
         state.keys, state.active = remaining, active
+        state.byteStart, state.fieldStart = a + #completed, e.cursor - state.fieldWidth
         snapshot(k, state)
         k.preedit = state
     end
