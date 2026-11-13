@@ -12,14 +12,31 @@ P.defaults = {
     ["chat:WHISPER"] = { W.L["On my way."], W.L["Invite, please."], W.L["Group?"], W.L["Thanks!"] },
     ["auction:search"] = { W.L["Linen Cloth"], W.L["Copper Ore"], W.L["Healing Potion"], W.L["Light Leather"] },
 }
-function P.Storage(bank, create)
-    if not bank or bank == "phrases" then return W.db end
-    if bank ~= "phrasesLeft" and bank ~= "phrasesRight" then return end
-    local store = W.db.phraseBanks[bank]
-    if not store and create then
-        store = { phrases = {}, bindings = {} }; W.db.phraseBanks[bank] = store
+function P.InitPages()
+    if type(W.db.quickPages) == "table" and #W.db.quickPages > 0 then return end
+    local pages = { "phrases" }
+    for _, bank in ipairs({ "phrasesLeft", "phrasesRight" }) do
+        if W.db.phraseBanks[bank] then pages[#pages + 1] = bank end
     end
-    return store
+    W.db.quickPages = pages
+end
+function P.AddPage()
+    local pages = W.db.quickPages
+    W.db.quickPageSerial = (W.db.quickPageSerial or 0) + 1
+    local key = "page" .. W.db.quickPageSerial
+    pages[#pages + 1] = key
+    W.db.phraseBanks[key] = { phrases = {} }
+    return #pages
+end
+function P.RemovePage(index)
+    local pages = W.db.quickPages
+    if index == 1 or not pages[index] then return false end
+    W.db.phraseBanks[table.remove(pages, index)] = nil
+    return true
+end
+function P.Storage(bank)
+    if not bank or bank == "phrases" then return W.db end
+    return W.db.phraseBanks[bank]
 end
 function P.Resolve(context, slot, bank)
     local store = P.Storage(bank)
@@ -48,8 +65,9 @@ function P.Resolve(context, slot, bank)
     return "", context.key
 end
 function P.Save(scope, slot, text, bank, link, destination)
+    if type(slot) ~= "number" or slot < 1 or slot > 8 or slot % 1 ~= 0 then return false, W.L["Invalid action."] end
     if type(text) ~= "string" or text == "" then return false, W.L["Enter a phrase first."] end
-    local store = P.Storage(bank, true)
+    local store = P.Storage(bank)
     if not store then return false, W.L["Invalid action."] end
     store.phrases[scope] = store.phrases[scope] or {}
     store.phrases[scope][slot] = { text = W.Text.Limit(text, 1024, 255), link = W.Copy(link), destination = W.Copy(destination) }
@@ -58,37 +76,4 @@ end
 function P.Reset(scope, slot, bank)
     local store = P.Storage(bank)
     if store and store.phrases[scope] then store.phrases[scope][slot] = nil end
-end
-function P.Bindings(context, bank)
-    local store = P.Storage(bank)
-    for _, scope in ipairs(W.Contexts.Scopes(context)) do
-        if store and store.bindings[scope] then return store.bindings[scope], scope end
-    end
-    return { "primary", "back", "delete", "shift" }, "default"
-end
-function P.BindingsForScope(scope, context, bank)
-    local store = P.Storage(bank)
-    if store and store.bindings[scope] then return store.bindings[scope] end
-    if scope == "global" then return { "primary", "back", "delete", "shift" } end
-    if scope == "chat" then return store and store.bindings.global or { "primary", "back", "delete", "shift" } end
-    return P.Bindings(context, bank)
-end
-function P.CheckBinding(scope, slot, action, context, bank)
-    local bindings = P.BindingsForScope(scope, context, bank)
-    for i, existing in ipairs(bindings) do
-        if i ~= slot and existing == action and action ~= "unbound" then
-            return false, W.L.Format("Already assigned to phrase %d. Choose Unbound there first.", i)
-        end
-    end
-    return true
-end
-function P.Bind(scope, slot, action, context, bank)
-    local ok, reason = P.CheckBinding(scope, slot, action, context, bank)
-    if not ok then return false, reason end
-    local store = P.Storage(bank, true)
-    if not store then return false, W.L["Invalid action."] end
-    local bindings = W.Copy(P.BindingsForScope(scope, context, bank))
-    bindings[slot] = action
-    store.bindings[scope] = bindings
-    return true
 end

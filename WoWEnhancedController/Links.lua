@@ -254,7 +254,7 @@ end
 function L:Draw(k, message)
     local state = k.linking
     local function button(text, action, hint, weight) return { text = text, action = action, hint = hint, weight = weight or 1 } end
-    self:HideTooltip(); k.quickVisible = false; k.quickBankButtons = nil
+    self:HideTooltip(); k.quickVisible = false
     if k.quickDecoration then k.quickDecoration:Hide() end
     if k.inputBorder then k.inputBorder:Hide() end
     k.destination:Hide(); W.Theme.FocusBadge(k.focusButton)

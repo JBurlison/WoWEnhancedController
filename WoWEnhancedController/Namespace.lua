@@ -1,6 +1,6 @@
 local addonName, W = ...
 _G.WoWEnhancedController = W
-W.name, W.version = addonName, "1.0.1"
+W.name, W.version = addonName, "1.1.0"
 W.frames, W.adapters, W.drafts = {}, {}, {}
 
 function W.Secret(value)
@@ -68,6 +68,7 @@ function W.InitDB()
         end
         W.db.schema = 6
     end
+    W.Phrases.InitPages()
     W.Theme.NormalizeAppearance()
 end
 

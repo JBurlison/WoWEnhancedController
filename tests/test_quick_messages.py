@@ -1,4 +1,4 @@
-"""Combo assignment and native Settings ownership; simulated callbacks, not hardware."""
+"""Paged quick actions and native Settings ownership; simulated callbacks, not hardware."""
 import unittest
 import test_radial as fixture
 
@@ -7,7 +7,7 @@ class QuickMessageTests(unittest.TestCase):
         self.env=fixture.RadialTests();self.env.load_addon(settings_model=True)
     def run_lua(self,code):self.env.run_lua(code)
 
-    def test_icon_only_banks_and_recycled_labels_do_not_require_implicit_fontstrings(self):
+    def test_icon_only_pages_and_recycled_labels_do_not_require_implicit_fontstrings(self):
         self.run_lua('''
             local bare=CreateFrame("Button",nil,UIParent)
             bare:SetNormalFontObject(GameFontNormal);bare:SetText("")
@@ -15,11 +15,11 @@ class QuickMessageTests(unittest.TestCase):
             local k=W.Keyboard;local box=HOST.Field("ChatFrame1EditBox","kept");k:Open(box)
             for _,skin in ipairs({"minimal","classic","gold"})do
                 W.db.keyboardAppearance.buttons=skin;k:Draw()
-                for _,b in ipairs(k.quickBankButtons)do
+                for _,b in ipairs(k.quickPageButtons)do
                     assert(b:GetText()==""and b:GetFontString()and b.prompt.icons[1]:IsShown())
                 end
             end
-            local b=k.quickBankButtons[1];b.label=nil
+            local b=k.quickPageButtons[1];b.label=nil
             W.Theme.Prompt(b,b.basePrompt,"bank")
             local label=b:GetFontString();assert(label)
             b:SetText("-");assert(b:GetFontString()==label and label:GetText()=="-")
@@ -34,16 +34,14 @@ class QuickMessageTests(unittest.TestCase):
             HOST.Press("PADRTRIGGER");assert(#HOST.sent==0 and box:GetText()=="original")
             local f=k.frame;W.Input.waitNeutral=false
             f:GetScript("OnGamePadButtonDown")(f,"PADLTRIGGER")
-            f:GetScript("OnGamePadButtonDown")(f,"PAD1")
-            f:GetScript("OnGamePadButtonUp")(f,"PADLTRIGGER")
-            assert(not k.composing)
-            f:GetScript("OnGamePadButtonUp")(f,"PAD1");assert(k.composing and k.composing.slot==1)
+            W.Input:Stick("Camera",0,1);assert(not k.composing)
+            f:GetScript("OnGamePadButtonUp")(f,"PADLTRIGGER");assert(k.composing and k.composing.slot==1)
             k:Action("clear");k:Insert("Invite 用户!");HOST.Press("PADRTRIGGER")
             assert(k.assigning and not k.composing and box:GetText()=="original" and #HOST.sent==0)
             assert(W.db.phrases["chat:PARTY"][1].text=="Invite 用户!")
             assert(not W.db.bindings["chat:PARTY"]) -- Editing words retains shortcut inheritance.
             HOST.Press("PADFORWARD");W.Input.waitNeutral=false
-            f:GetScript("OnGamePadButtonDown")(f,"PADLTRIGGER");HOST.Press("PAD1")
+            f:GetScript("OnGamePadButtonDown")(f,"PADLTRIGGER");W.Input:Stick("Camera",0,1)
             f:GetScript("OnGamePadButtonUp")(f,"PADLTRIGGER")
             assert(box:GetText()=="original" and #HOST.sent==1 and HOST.sent[1][1]=="Invite 用户!" and HOST.sent[1][2]=="PARTY")
             box:SetAttribute("chatType","RAID");W.NativeField.Read(k,false,true);k:Draw()
@@ -54,7 +52,7 @@ class QuickMessageTests(unittest.TestCase):
         self.run_lua('''
             local k=W.Keyboard;local box=HOST.Field("SearchBox","keep");k:Open(box)
             k.editor:Select(1,3);k:Sync();k:ToggleAssign();k:UsePhrase(1)
-            k:Action("clear");k:Insert("discard");k:CycleQuickBinding();k:Action("back")
+            k:Action("clear");k:Insert("discard");k:Action("back")
             assert(not k.composing and k.assigning and box:HasFocus() and box:GetText()=="keep")
             assert(not W.db.phrases[k:Context().key] and not W.db.bindings[k:Context().key])
             assert(k.editor.anchor==1 and k.editor.cursor==3)
@@ -72,7 +70,7 @@ class QuickMessageTests(unittest.TestCase):
             W.Phrases.Save("chat",1,"/reload")
             local f=k.frame;W.Input.waitNeutral=false
             f:GetScript("OnGamePadButtonDown")(f,"PADLTRIGGER")
-            HOST.Press("PAD1")
+            W.Input:Stick("Camera",0,1)
             f:GetScript("OnGamePadButtonUp")(f,"PADLTRIGGER")
             assert(reloads==1 and #HOST.sent==0 and box:GetText()=="unfinished draft")
             W.Phrases.Save("chat",2," /RELOAD ",nil,nil,{chatType="CHANNEL",channelName="Left channel"})
@@ -112,7 +110,7 @@ class QuickMessageTests(unittest.TestCase):
             button("Channel: Guild").run();HOST.Press("PAD2");assert(k.session and not k.channels and k:Context().chatType=="GUILD")
             button("Channel: Guild").run();button("Party").run();assert(box:GetText()=="keep this party draft")
             k:ToggleAssign()
-            assert(k.frame:GetWidth()<wide and not button("q") and k.focused.messageSlot and k.focused.focus:IsShown())
+            assert(k.frame:GetWidth()<wide and not button("q") and k.focused.messageSlot and k.quickDecoration.highlight:IsShown())
             k:Action("primary");assert(not button("q") and box:HasFocus() and k.focused:GetText()=="Hello!")
             button("Hello!").run();button("Send to: Current chat").run();button("Trade").run()
             assert(button("Send to: Trade") and box:GetAttribute("chatType")=="PARTY")
@@ -162,7 +160,7 @@ class QuickMessageTests(unittest.TestCase):
                         if not seen[k.focused] then seen[k.focused]=true;table.insert(queue,k.focused) end
                     end
                 end
-                for _,row in ipairs(k.rows) do for _,b in ipairs(row) do assert(seen[b],b:GetText()) end end
+                for _,row in ipairs(k.rows) do for _,b in ipairs(row) do assert(not b:IsEnabled() or seen[b],b:GetText()) end end
             end
             reachable();k:UsePhrase(1);reachable();k:Action("channels");reachable()
         ''')
@@ -188,107 +186,122 @@ class QuickMessageTests(unittest.TestCase):
             for _,control in ipairs(controls)do assert(seen[control.r..":"..control.c],control.b:GetText())end
         ''')
 
-    def test_saved_scopes_bindings_remapped_physical_positions_and_unbound_modifier(self):
+    def test_wedge_positions_and_prompts_follow_remapped_controls(self):
         self.run_lua('''
-            W.db.phrases.global={[1]={text="User global"}};W.db.bindings["chat:PARTY"]={"back","primary","delete","unbound"}
+            W.db.phrases.global={[1]={text="User global"}}
             local k=W.Keyboard;local box=HOST.Field("ChatFrame1EditBox","");box:SetAttribute("chatType","PARTY");k:Open(box)
-            assert(k.quickButtons[1]:GetText()=="User global" and k.quickButtons[1].navX>k.quickButtons[2].navX)
+            local x,y=k.quickButtons[1].navX,k.quickButtons[1].navY
+            assert(k.quickButtons[1]:GetText()=="User global" and y<k.quickButtons[3].navY)
             W.db.style="Nintendo";W.Input:Refresh();k:Draw()
-            assert(k.quickButtons[1].navX<k.quickButtons[2].navX)
-            assert(k.quickButtons[2].prompt.icons[1].atlas==W.Input:Icon("primary"))
-            W.db.actionBindings={phrases=""};W.Input:Refresh();k:Draw();assert(k.quickBankButtons[2]:GetText()=="-" and not k.quickBankButtons[2].prompt.icons[1].shown)
-            assert(W.db.phrases.global[1].text=="User global" and W.db.bindings["chat:PARTY"][4]=="unbound")
+            assert(k.quickButtons[1].navX==x and k.quickButtons[1].navY==y)
+            assert(k.quickPageButtons[1].prompt.icons[1].atlas==W.Input:Icon("phrasesLeft"))
+            assert(k.quickDecoration.aimGlyph.atlas==W.Input:Icon("phrases"))
+            W.db.actionBindings={phrases="",phrasesRight="PAD5"};W.Input:Refresh();k:Draw()
+            assert(not k.quickDecoration.aimGlyph:IsShown() and k.quickHint:GetText():find("Unbound",1,true))
+            assert(k.quickPageButtons[2]:GetText()==">" and k.quickButtons[1]:GetText()=="User global")
         ''')
 
     def test_bumper_migration_preserves_custom_binds_and_existing_messages(self):
         self.run_lua('''
             W.db.schema=5;W.db.actionBindings={left="PADLSHOULDER",right="PADRSHOULDER",clear="PADLSTICK",symbols=""}
             W.db.phrases.global={[1]={text="Kept"}};W.db.bindings.global={"back","primary","delete","shift"}
+            W.db.quickPages=nil
+            local left={text="Pinned",link={kind="tracked"},destination={chatType="PARTY"}}
+            W.db.phraseBanks={phrasesLeft={phrases={chat={[3]=left}}},phrasesRight={phrases={global={{text="Right"}}}}}
             W.InitDB();W.Input:Refresh()
+            assert(#W.db.quickPages==3 and W.db.quickPages[2]=="phrasesLeft" and W.db.quickPages[3]=="phrasesRight")
+            local text,_,link,dest=W.Phrases.Resolve({key="chat:SAY",chat=true},3,W.db.quickPages[2])
+            assert(link.kind=="tracked" and dest.chatType=="PARTY" and W.Phrases.Resolve({key="global"},1,W.db.quickPages[3])=="Right")
             assert(W.db.schema==6 and W.Input.keys.left=="" and W.Input.keys.right=="" and W.Input.keys.clear=="")
             assert(W.Input.keys.symbols=="PADLSTICK" and W.Input.keys.phrasesLeft=="PADLSHOULDER" and W.Input.keys.phrasesRight=="PADRSHOULDER")
-            assert(W.Phrases.Resolve({key="global"},1)=="Kept" and W.Phrases.Bindings({key="global"})[1]=="back")
+            assert(W.Phrases.Resolve({key="global"},1)=="Kept" and W.db.bindings.global[1]=="back")
             W.db.schema=5;W.db.actionBindings={left="PAD5",right="PAD6",clear="PAD7",symbols="PAD8"}
             W.InitDB();W.Input:Refresh()
             assert(W.Input.keys.left=="PAD5" and W.Input.keys.right=="PAD6" and W.Input.keys.clear=="PAD7" and W.Input.keys.symbols=="PAD8")
         ''')
 
-    def test_three_independent_banks_context_inheritance_and_numeric_fallback(self):
+    def test_pages_are_unlimited_and_stable_across_removal_and_reload(self):
         self.run_lua('''
             local p=W.Phrases;local party={key="chat:PARTY",chat=true};local guild={key="chat:GUILD",chat=true}
-            assert(p.Resolve(party,1,"phrasesLeft")=="" and not next(W.db.phraseBanks))
-            for _,bank in ipairs(W.Input.modifiers)do
-                for slot=1,4 do assert(p.Save("global",slot,bank..slot,bank))end
-                assert(p.Save("chat",1,bank.." chat",bank));assert(p.Save(party.key,1,bank.." party",bank))
-                assert(p.Resolve(party,1,bank)==bank.." party" and p.Resolve(guild,1,bank)==bank.." chat")
-                assert(p.Resolve({key="auction:search"},2,bank)==bank..2)
+            for n=2,36 do assert(p.AddPage()==n) end
+            for _,bank in ipairs(W.db.quickPages)do
+                for slot=1,8 do assert(p.Save("global",slot,bank..slot,bank))end
+                assert(p.Save("chat",8,bank.." chat",bank) and p.Save(party.key,8,bank.." party",bank))
+                assert(p.Resolve(party,8,bank)==bank.." party" and p.Resolve(guild,8,bank)==bank.." chat")
+                p.Reset(party.key,8,bank);assert(p.Resolve(party,8,bank)==bank.." chat")
                 assert(p.Resolve({key="craft",numeric=true},2,bank)=="5")
             end
-            assert(p.Bind(party.key,1,"unbound",party,"phrasesLeft"))
-            assert(p.Bind(party.key,2,"primary",party,"phrasesLeft"))
-            assert(p.Bindings(party,"phrasesRight")[1]=="primary" and p.Bindings(party)[1]=="primary")
-            p.Reset(party.key,1,"phrasesLeft");assert(p.Resolve(party,1,"phrasesLeft")=="phrasesLeft chat")
+            local keep=W.db.quickPages[36]; local removed=W.db.quickPages[2]
+            assert(not p.RemovePage(1) and p.RemovePage(2) and not W.db.phraseBanks[removed])
+            assert(p.AddPage()==36 and W.db.quickPages[36]~=keep)
+            W.InitDB();assert(W.db.quickPages[35]==keep and p.Resolve(guild,8,keep)==keep.." chat")
         ''')
 
-    def test_modifier_release_orders_multimod_cancellation_and_send_suppression(self):
+    def test_aim_is_clockwise_and_release_uses_only_the_current_wedge_once(self):
         self.run_lua('''
-            local k,I=W.Keyboard,W.Input;local box=HOST.Field("ChatFrame1EditBox","");k:Open(box)
-            local f=k.frame
-            local function down(t)HOST.keys[t]=true;f:GetScript("OnGamePadButtonDown")(f,t)end
-            local function up(t)HOST.keys[t]=false;f:GetScript("OnGamePadButtonUp")(f,t)end
-            for _,case in ipairs({{"PADLSHOULDER","phrasesLeft"},{"PADLTRIGGER","phrases"},{"PADRSHOULDER","phrasesRight"}})do
-                W.Phrases.Save("global",1,case[2],case[2])
-                for _,modifierFirst in ipairs({true,false})do
-                    k:Action("clear");I.waitNeutral=false;down(case[1]);assert(k.quickBank==case[2] and I.layer==case[2])
-                    down("PAD1");if modifierFirst then up(case[1]);up("PAD1")else up("PAD1");up(case[1])end
-                    assert(box:GetText()==case[2] and not I.layer and #HOST.sent==0)
-                end
-                for _,reverse in ipairs({true,false})do
-                    I.waitNeutral=false
-                    if reverse then down("PADRTRIGGER");down(case[1])else down(case[1]);down("PADRTRIGGER")end
-                    up(case[1]);up("PADRTRIGGER");assert(#HOST.sent==0)
-                end
+            local k,I=W.Keyboard,W.Input;local box=HOST.Field("ChatFrame1EditBox","draft");box:SetAttribute("chatType","SAY");k:Open(box)
+            for n,xy in ipairs({{0,1},{1,1},{1,0},{1,-1},{0,-1},{-1,-1},{-1,0},{-1,1}}) do
+                W.Phrases.Save("global",n,"Slot "..n)
+                I.waitNeutral=false;I:Down("PADLTRIGGER");I:Stick("Camera",xy[1],xy[2])
+                assert(k.quickAim==n and #HOST.sent==n-1)
+                HOST.Press("PAD1");I:Up("PADLTRIGGER");I:Up("PADLTRIGGER")
+                assert(#HOST.sent==n and HOST.sent[n][1]=="Slot "..n and box:GetText()=="draft")
             end
-            k:Action("clear");I.waitNeutral=false;down("PADLSHOULDER");down("PAD1");down("PADRSHOULDER")
-            up("PADRSHOULDER");assert(I.layer=="phrasesLeft");up("PAD1");up("PADLSHOULDER");assert(box:GetText()=="")
-            I.waitNeutral=false;down("PADLSHOULDER");down("PADRSHOULDER");up("PADRSHOULDER");down("PAD1");up("PAD1");up("PADLSHOULDER")
-            assert(box:GetText()=="phrasesLeft")
+            I:Down("PADLTRIGGER");I:Stick("Camera",0,1);I:Stick("Camera",.1,.1);I:Up("PADLTRIGGER")
+            I:Down("PADRTRIGGER");I:Down("PADLTRIGGER");I:Up("PADLTRIGGER");I:Up("PADRTRIGGER")
+            assert(#HOST.sent==8 and box:GetText()=="draft")
         ''')
 
-    def test_lost_modifier_release_foreign_focus_and_new_session_never_insert(self):
+    def test_aim_owns_axes_only_while_held_and_uses_the_mapped_stick_at_release(self):
         self.run_lua('''
-            local k,I=W.Keyboard,W.Input;local box=HOST.Field("SearchBox","kept");k:Open(box)
-            W.Phrases.Save("global",1,"stale","phrasesLeft")
-            I.waitNeutral=false;HOST.keys.PADLSHOULDER=true;HOST.keys.PAD1=true
-            I:Down("PADLSHOULDER");I:Down("PAD1");HOST.keys.PADLSHOULDER=false;I:Update();I:Up("PAD1")
-            assert(box:GetText()=="kept" and not I.layer)
-            I.waitNeutral=false;I:Down("PADLSHOULDER");I:Down("PAD1")
-            local foreign=HOST.Field("OtherSearch","foreign");foreign:SetFocus();I:Up("PADLSHOULDER");I:Up("PAD1")
-            assert(box:GetText()=="kept" and foreign:GetText()=="foreign" and not I.layer)
-            k:Open(box);I.waitNeutral=false;I:Down("PADLSHOULDER");I:Down("PAD1");k:Close();k:Open(box)
-            I:Up("PAD1");I:Up("PADLSHOULDER");assert(box:GetText()=="kept")
+            local k,i=W.Keyboard,W.Input;local b=HOST.Field("SearchBox","");k:Open(b)
+            W.Phrases.Save("global",3,"East");k:Draw();W.Radial.frame:SetAttribute("camera-index",1)
+            HOST.pad.sticks={{x=0,y=0,len=0},{x=0,y=1,len=1}}
+            assert(not i.quickCapture:IsVisible())
+            i.waitNeutral=false;HOST.keys.PADLTRIGGER=true;i:Down("PADLTRIGGER")
+            assert(i.quickCapture:IsVisible() and i.quickCapture:IsGamePadStickEnabled() and i.quickCapture.propagateKeyboard==false)
+            HOST.pad.sticks[1]={x=1,y=0,len=1};i:Update();assert(k.quickAim==3)
+            HOST.pad.sticks[1]={x=0,y=0,len=0};i:Up("PADLTRIGGER");assert(b:GetText()=="" and not i.quickCapture:IsVisible())
+            HOST.pad.sticks[1]={x=1,y=0,len=1};i:Down("PADLTRIGGER");i:Up("PADLTRIGGER")
+            assert(b:GetText()=="East" and not i.quickCapture:IsVisible())
+            i:Down("PADLTRIGGER");k:Close();assert(not i.quickCapture:IsVisible() and not i.quickHold)
         ''')
 
-    def test_bumper_assignment_pins_bank_not_inherited_shortcut_and_l3_symbols(self):
+    def test_lost_release_focus_session_channel_and_page_changes_cancel_aim(self):
         self.run_lua('''
-            local k=W.Keyboard;local box=HOST.Field("ChatFrame1EditBox","original");box:SetAttribute("chatType","PARTY");k:Open(box)
-            local cursor=k.editor.cursor;HOST.Press("PADLSHOULDER");assert(k.editor.cursor==cursor and box:GetText()=="original")
-            HOST.Press("PADRSHOULDER");assert(k.editor.cursor==cursor and box:GetText()=="original")
-            HOST.Press("PADLSTICK");assert(k.symbols and box:GetText()=="original")
-            HOST.Press("PADLSTICK");assert(not k.symbols)
-            HOST.Press("PADFORWARD");k:SetQuickBank("phrasesLeft");k:UsePhrase(1)
-            assert(k.composing.bank=="phrasesLeft");k:SetQuickBank("phrasesRight");assert(k.quickBank=="phrasesLeft")
-            k:Action("clear");k:Insert("Left party");HOST.Press("PADRTRIGGER")
-            assert(W.db.phraseBanks.phrasesLeft.phrases["chat:PARTY"][1].text=="Left party")
-            assert(not W.db.phraseBanks.phrasesLeft.bindings["chat:PARTY"] and not next(W.db.phrases) and not W.db.phraseBanks.phrasesRight)
-            k:SetQuickBank("phrasesRight");k:UsePhrase(1);k:Insert("Cancel");k:Action("back")
-            assert(not W.db.phraseBanks.phrasesRight and box:GetText()=="original")
-            k:ToggleAssign();W.db.style="Nintendo";W.Input:Refresh();k:Draw()
-            assert(k.quickBankButtons[1].prompt.icons[1].atlas=="gamepad-switch-128x-shoulder-l-normal")
-            assert(k.quickBankButtons[3].prompt.icons[1].atlas=="gamepad-switch-128x-shoulder-r-normal")
-            assert(W.Input:Icon("symbols")=="gamepad-switch-128x-stick-l3-normal")
-            k:Action("left");assert(k.editor.cursor==#box:GetText()-1)
-            k:Action("clear");assert(box:GetText()=="")
+            local k,I=W.Keyboard,W.Input;local box=HOST.Field("ChatFrame1EditBox","kept");box:SetAttribute("chatType","SAY");k:Open(box)
+            local function aim()I.waitNeutral=false;I:Down("PADLTRIGGER");I:Stick("Camera",0,1);assert(k.quickAim==1)end
+            local function release()I:Up("PADLTRIGGER");assert(#HOST.sent==0 and box:GetText()=="kept" and not I.quickHold)end
+            aim();HOST.keys.PADLTRIGGER=false;I:Update();release()
+            aim();local foreign=HOST.Field("OtherSearch","foreign");foreign:SetFocus();release();assert(foreign:GetText()=="foreign")
+            k:Open(box);aim();k:Close();k:Open(box);release()
+            aim();box:SetAttribute("chatType","PARTY");release();W.NativeField.Read(k,false,true);k:Draw()
+            W.Phrases.AddPage();aim();HOST.Press("PADRSHOULDER");release();assert(k.quickPage==2)
+            aim();HOST.Press("PAD2");release()
+            aim();I:Down("PADLSHOULDER");release();I:Up("PADLSHOULDER");assert(k.quickPage==1)
+            I:Down("PADRSHOULDER");I:Down("PADLTRIGGER");I:Stick("Camera",0,1);release();I:Up("PADRSHOULDER")
+            assert(k.quickPage==2);k:Close();k:Open(box);assert(k.quickPage==2)
+        ''')
+
+    def test_page_controls_edit_confirm_deletion_and_keep_the_original_draft(self):
+        self.run_lua('''
+            local k=W.Keyboard; local box=HOST.Field("ChatFrame1EditBox","original");box:SetAttribute("chatType","PARTY");k:Open(box)
+            local function button(label)
+                for _,row in ipairs(k.rows)do for _,b in ipairs(row)do if b:GetText()==label then return b end end end
+                error(label)
+            end
+            local cursor=k.editor.cursor;HOST.Press("PADLSHOULDER");assert(k.editor.cursor==cursor)
+            HOST.Press("PADLSTICK");assert(k.symbols);HOST.Press("PADLSTICK");assert(not k.symbols)
+            HOST.Press("PADFORWARD");assert(not button("Remove page"):IsEnabled());button("Add page").run()
+            local key=k.quickBank;k:UsePhrase(8);HOST.Press("PADLSHOULDER");assert(k.composing.bank==key and k.quickPage==2)
+            k:Action("clear");k:Insert("Ready on eight");HOST.Press("PADRTRIGGER")
+            assert(W.db.phraseBanks[key].phrases["chat:PARTY"][8].text=="Ready on eight" and box:GetText()=="original")
+            button("Add page").run();HOST.Press("PADRSHOULDER");assert(k.quickPage==1)
+            HOST.Press("PADLSHOULDER");assert(k.quickPage==3);button("Remove page").run();assert(#W.db.quickPages==3)
+            HOST.Press("PADLSHOULDER");assert(k.quickPage==2);HOST.Press("PADRSHOULDER")
+            button("Remove page").run();button("Confirm removal").run()
+            assert(k.quickPage==2 and #W.db.quickPages==2 and k.quickBank==key)
+            k:ToggleAssign();k:UsePhrase(8);assert(#HOST.sent==1 and HOST.sent[1][1]=="Ready on eight" and box:GetText()=="original")
         ''')
 
     def test_standalone_contexts_inheritance_and_numeric_native_exception(self):

@@ -123,14 +123,14 @@ end
 function T.KeyboardButton(button, skin, selected)
     skin = skin or T.NormalizeAppearance().buttons
     local art = keyboardArt(button)
-    button.keyboardSkin, button.tabSelected = skin, nil
+    button.keyboardSkin, button.tabSelected = skin ~= "wheel" and skin or nil, nil
     if button.tabArt then for _, texture in ipairs(button.tabArt) do texture:Hide() end end
     button:ClearNormalTexture(); button:ClearPushedTexture(); button:ClearHighlightTexture()
     art.face:SetShown(skin == "controller")
     art.normal:SetShown(skin == "controller")
     art.selected:SetShown(selected == true)
     art.pressed:Hide(); art.hover:Hide(); paintFace(art)
-    if skin ~= "controller" then
+    if skin ~= "controller" and skin ~= "wheel" then
         local normal = skin == "classic" and "Interface\\Buttons\\UI-Panel-Button-Up"
             or skin == "minimal" and "Interface\\Buttons\\WHITE8X8" or "Interface\\Common\\dark-goldframe-button"
         local pushed = skin == "classic" and "Interface\\Buttons\\UI-Panel-Button-Down"

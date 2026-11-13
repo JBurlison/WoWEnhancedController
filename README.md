@@ -22,7 +22,9 @@ The keyboard opens with the game world visible between the keys. In **Settings �
 | Send chat or finish editing | RT | R2 | ZR |
 | Close and keep your edits | B | Circle | B |
 
-Choose **Quick messages** in the launcher to assign phrases to shortcuts. For example, save “Ready for the next pull” with **Send to** set to **Party**. With chat open, hold the assigned bumper or trigger and press its face button to send the phrase. Your current draft stays in place when you send to a pinned channel.
+The keyboard’s **Quick messages** wheel has eight slots per page. Use **LB / RB** to turn pages. Hold **LT**, point the **right stick** at a message, and release **LT** to send it in chat or insert it into a text field. Release **LT** with the stick centered to cancel.
+
+Choose **Assign** beside the wheel or **Quick messages** in the launcher to edit a slot, add as many pages as you need, or remove a page. For example, save “Ready for the next pull” with **Send to** set to **Party**. Sending it leaves your chat draft in place.
 
 Choose **Link in chat** to share an item, recipe, or quest. Selecting a quest title includes its unfinished objectives. Select a single objective to share only that progress.
 

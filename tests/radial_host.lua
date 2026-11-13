@@ -60,7 +60,6 @@ C_Spell={GetSpellInfo=function(value)
     end
 end}
 function M:SetShown(on) if on then self:Show() else self:Hide() end end
-function M:SetRotation(value) self.rotation=value end
 function M:SetStatusBarTexture(value)self.statusTexture=value end
 function M:SetStatusBarColor(...)self.statusColor={...}end
 function M:SetMinMaxValues(low,high)self.range={low,high}end

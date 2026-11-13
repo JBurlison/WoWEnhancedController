@@ -180,7 +180,7 @@ class AddonTests(unittest.TestCase):
         self.run_lua('''
             local k=W.Keyboard;local box=HOST.Field("SearchBox","draft");k:Open(box)
             local height=k.frame:GetHeight()
-            assert(height<=400 and k.frame:GetWidth()>708 and #k.quickButtons==4)
+            assert(height<=540 and k.frame:GetWidth()>708 and #k.quickButtons==8)
             assert(not k.destination:IsShown() and k.input==nil)
             k:Status("Review this edit");assert(k.destination:GetText()=="Review this edit" and box:GetText()=="draft")
             k:Draw();assert(not k.destination:IsShown() and k.frame:GetHeight()==height)
@@ -356,14 +356,14 @@ class AddonTests(unittest.TestCase):
             HOST.Press("PAD1");assert(not W.Keyboard.frame:IsShown())
         ''')
 
-    def test_context_phrase_precedence_conflicts_and_persistence(self):
+    def test_context_phrase_precedence_slot_limits_and_persistence(self):
         self.run_lua('''
             local party={key="chat:PARTY",chat=true};local guild={key="chat:GUILD",chat=true}
             W.Phrases.Save("global",1,"global");W.Phrases.Save("chat",1,"chat")
             W.Phrases.Save(party.key,1,"party");assert(W.Phrases.Resolve(party,1)=="party")
             assert(W.Phrases.Resolve(guild,1)=="chat")
-            local ok=W.Phrases.Bind(party.key,2,"primary",party);assert(not ok)
-            assert(W.Phrases.Bind(party.key,1,"unbound",party));assert(W.Phrases.Bind(party.key,2,"primary",party))
+            assert(not W.Phrases.Save(party.key,9,"beyond wheel"))
+            assert(W.Phrases.Save(party.key,8,"eighth slot") and W.Phrases.Resolve(party,8)=="eighth slot")
             W.InitDB();assert(W.Phrases.Resolve(party,1)=="party")
         ''')
 
@@ -404,18 +404,14 @@ class AddonTests(unittest.TestCase):
             assert(not W.Usable(named))
         ''')
 
-    def test_controller_library_can_unbind_resolve_conflict_and_edit_scope(self):
+    def test_controller_library_can_edit_context_and_global_scopes(self):
         self.run_lua('''
             local box=HOST.Field("ChatFrame1EditBox","");box:SetAttribute("chatType","PARTY");W.Keyboard:Open(box)
-            local k=W.Keyboard;k:ToggleAssign();k:UsePhrase(1);k:CycleQuickBinding()
-            assert(k.composing.binding=="unbound" and not W.db.bindings["chat:PARTY"])
-            k:Action("confirm");assert(W.db.bindings["chat:PARTY"][1]=="unbound")
-            k:UsePhrase(2);k:CycleQuickBinding();k:CycleQuickBinding()
-            assert(k.composing.binding=="primary");k:Action("confirm")
-            assert(W.db.bindings["chat:PARTY"][2]=="primary")
-            k:UsePhrase(2);k:CycleQuickScope();k:CycleQuickScope()
-            assert(k.composing.scope=="global");k:CycleQuickBinding();k:Action("confirm")
-            assert(W.db.bindings.global[2]=="unbound" and W.db.bindings.global[1]=="primary")
+            local k=W.Keyboard;k:ToggleAssign();k:UsePhrase(8);k:Insert("Party only");k:Action("confirm")
+            assert(W.db.phrases["chat:PARTY"][8].text=="Party only")
+            k:UsePhrase(8);k:CycleQuickScope();k:CycleQuickScope()
+            assert(k.composing.scope=="global");k:Action("clear");k:Insert("Everyone");k:Action("confirm")
+            assert(W.db.phrases.global[8].text=="Everyone" and W.Phrases.Resolve(k:Context(),8)=="Party only")
         ''')
 
     def test_native_controller_images_without_duplicate_draft(self):
@@ -430,7 +426,7 @@ class AddonTests(unittest.TestCase):
                 k:Select(2,1)
                 assert(k.focused.prompt.icons[1].atlas==case[2])
                 local phrase=k.quickButtons[1]
-                assert(phrase.prompt.icons[1].shown and k.quickBankButtons[2]:IsShown() and k.quickBankButtons[2].prompt.icons[1].shown)
+                assert(not (phrase.prompt.icons[1] and phrase.prompt.icons[1]:IsShown()) and k.quickDecoration.aimGlyph.atlas==W.Input:Icon("phrases"))
                 assert(not phrase:GetText():find("[",1,true))
             end
             W.db.actionBindings={primary="PAD3"};W.Input:Refresh();k:Draw()
@@ -482,12 +478,12 @@ class AddonTests(unittest.TestCase):
             assert(W.Keyboard.frame:GetWidth()*W.Keyboard.frame:GetScale()<=608)
         ''')
 
-    def test_phrase_layer_and_repeat_release(self):
+    def test_wheel_selection_and_numeric_repeat_release(self):
         self.run_lua('''
             local box=HOST.Field("ChatFrame1EditBox","");box:SetAttribute("chatType","PARTY");W.Keyboard:Open(box)
             local f=W.Keyboard.frame;W.Input.waitNeutral=false
             f:GetScript("OnGamePadButtonDown")(f,"PADLTRIGGER")
-            f:GetScript("OnGamePadButtonDown")(f,"PAD1")
+            W.Input:Stick("Camera",0,1)
             f:GetScript("OnGamePadButtonUp")(f,"PADLTRIGGER")
             f:GetScript("OnGamePadButtonUp")(f,"PAD1");assert(W.Keyboard.editor.text=="" and HOST.sent[1][1]=="Ready!")
             local number=HOST.Field("Amount","3",true);number.GetMinValue=function()return 1 end;number.GetMaxValue=function()return 9 end
