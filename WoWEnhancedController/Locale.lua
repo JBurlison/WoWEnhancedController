@@ -23,13 +23,14 @@ local rows = {
     ruRU = { "йцукенгшщзх", "фывапролджэ", "ячсмитьбюё" },
 }
 local extras = {
-    deDE = "äöüß", frFR = "àâçéèêëîïôùûüÿœ", esES = "áéíóúüñ¿¡",
-    itIT = "àèéìòù", ptBR = "áàâãçéêíóôõú", ruRU = "ъыэё",
+    deDE = "äöüß", frFR = "àâæçéèêëîïôùûüÿœ", esES = "áéíóúüñ¿¡",
+    itIT = "àèéìòù", ptBR = "áàâãçéêíóôõúü", ruRU = "ъыэё",
+    zhCN = "，。！？、：；“”《》", zhTW = "，。！？、：；「」『』",
 }
 W.Locale.rows = rows[W.Locale.code] or { "qwertyuiop", "asdfghjkl", "zxcvbnm" }
 W.Locale.extras = extras[W.Locale.code]
-local lower = "àâäãçéèêëîïíôöòóõùûüúÿœñßйцукенгшщзхфывапролджэячсмитьбюёъ"
-local upper = "ÀÂÄÃÇÉÈÊËÎÏÍÔÖÒÓÕÙÛÜÚŸŒÑẞЙЦУКЕНГШЩЗХФЫВАПРОЛДЖЭЯЧСМИТЬБЮЁЪ"
+local lower = "æàâäãçéèêëîïíôöòóõùûüúÿœñßйцукенгшщзхфывапролджэячсмитьбюёъ"
+local upper = "ÆÀÂÄÃÇÉÈÊËÎÏÍÔÖÒÓÕÙÛÜÚŸŒÑẞЙЦУКЕНГШЩЗХФЫВАПРОЛДЖЭЯЧСМИТЬБЮЁЪ"
 local function characters(text)
     local result = {}
     for char in text:gmatch("[%z\1-\127\194-\244][\128-\191]*") do result[#result + 1] = char end

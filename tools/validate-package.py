@@ -11,7 +11,7 @@ toc = addon / "WoWEnhancedController.toc"
 version = next(line.split(':', 1)[1].strip() for line in toc.read_text(encoding="utf-8").splitlines() if line.startswith('## Version:'))
 package = root / f"dist/WoWEnhancedController-{version}-forever.zip"
 loads = [line.strip() for line in toc.read_text(encoding="utf-8").splitlines() if line.strip() and not line.startswith("#")]
-expected = {"WoWEnhancedController.toc", "Bindings.xml", *loads}
+expected = {"WoWEnhancedController.toc", "Bindings.xml", "Unicode-LICENSE.txt", *loads}
 expected.update(path.relative_to(addon).as_posix() for path in (addon / "Media").rglob("*") if path.is_file())
 icon_line = next(line for line in toc.read_text(encoding="utf-8").splitlines() if line.startswith("## IconTexture:"))
 icon_ref = icon_line.split(":", 1)[1].strip()
