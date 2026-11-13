@@ -39,6 +39,8 @@ function O.PaintAppearance()
                 T.Prompt(sample, sample.previewAction and { sample.previewAction } or {}, "inline")
             end
             b.samples[1].focus:SetShown(selected)
+        elseif b.appearanceFlag then
+            b.checkMark:SetShown(config[b.appearanceFlag])
         end
     end
     for _, label in ipairs(f.labels) do label:SetFontObject(T.Font("GameFontNormal")) end
@@ -47,11 +49,15 @@ end
 function O.MoveAppearance(dx, dy)
     local f, count = O.appearanceFrame, #T.buttonSkins
     local index = f.selected
-    if dy ~= 0 then
-        if index <= count then f.selected = W.Clamp(index + dy, 1, count + 1)
-        elseif dy < 0 then f.selected = count end
-    elseif index > count then
-        f.selected = W.Clamp(index + dx, count + 1, count + 2)
+    if index <= count then
+        f.selected = W.Clamp(index + dy, 1, count + 1)
+    elseif dy < 0 then
+        f.selected = index <= count + 2 and count or index - 2
+    elseif dy > 0 then
+        if index <= count + 2 then f.selected = index + 2 end
+    else
+        local first = index - (index - count - 1) % 2
+        f.selected = W.Clamp(index + dx, first, first + 1)
     end
     O.PaintAppearance()
 end
@@ -93,13 +99,34 @@ function O.CreateAppearance(canvas)
             b.previewAction = sample[4]; row.samples[j] = b
         end
     end
-    local function action(text, x, run)
+    local function action(text, x, y, run)
         local b = T.SettingsButton(f, W.L[text], function() if not W.Combat() then run() end end)
-        b:SetPoint("TOPLEFT", x, -454); b:SetSize(284, 38); register(b, run)
+        b:SetPoint("TOPLEFT", x, -y); b:SetSize(284, 38); return register(b, run)
     end
-    action("Reset appearance", 24, function() O.SetButtonSkin("controller") end)
-    action("Back", 332, O.Open)
-    f.status = label("D-pad: select · Confirm: use · Back: close", 24, 508, 592, 48)
+    local function toggle(text, key, x)
+        local b = action(text, x, 434, function()
+            local config = T.NormalizeAppearance()
+            config[key] = not config[key]
+            T.KeyboardShell(W.Keyboard.frame)
+            O.PaintAppearance()
+        end)
+        b.appearanceFlag = key
+        local box = b:CreateTexture(nil, "ARTWORK")
+        box:SetSize(28, 28); box:SetPoint("LEFT", 12, 0)
+        box:SetTexture("Interface\\Buttons\\UI-CheckBox-Up")
+        b.checkMark = b:CreateTexture(nil, "OVERLAY"); b.checkMark:SetAllPoints(box)
+        b.checkMark:SetTexture("Interface\\Buttons\\UI-CheckBox-Check")
+    end
+    toggle("Background", "background", 24)
+    toggle("Border", "border", 332)
+    action("Reset appearance", 24, 484, function()
+        local config = T.NormalizeAppearance()
+        config.background, config.border = false, false
+        T.KeyboardShell(W.Keyboard.frame)
+        O.SetButtonSkin("controller")
+    end)
+    action("Back", 332, 484, O.Open)
+    f.status = label("D-pad: select · Confirm: use · Back: close", 24, 526, 592, 42)
     f:SetScript("OnGamePadButtonDown", function(_, token)
         if not f:IsVisible() or W.Blocker() or W.Combat() or W.Input.active then return true end
         if f.held then return false end

@@ -14,16 +14,30 @@ function T.NormalizeAppearance()
     local valid = false
     for _, skin in ipairs(T.buttonSkins) do if config.buttons == skin[1] then valid = true end end
     if not valid then config.buttons = "controller" end
-    config.background, config.border = nil, nil
+    config.background = config.background == true
+    config.border = config.border == true
     return config
 end
 
 function T.KeyboardShell(frame)
-    -- Existing frames can survive a style refresh; none of their old shell
-    -- regions should be visible. New keyboards never allocate this shell.
-    for _, key in ipairs({ "border", "keyboardBackground", "keyboardEdge" }) do
-        if frame[key] then frame[key]:Hide() end
+    local config = W.db.keyboardAppearance
+    if config.background and not frame.keyboardBackground then
+        local fill = frame:CreateTexture(nil, "BACKGROUND")
+        fill:SetAllPoints(frame)
+        fill:SetColorTexture(.055, .045, .035, .88)
+        frame.keyboardBackground = fill
     end
+    if config.border and not frame.keyboardEdge then
+        local edge = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+        edge:SetAllPoints(frame)
+        edge:SetFrameLevel(frame:GetFrameLevel())
+        edge:EnableMouse(false)
+        edge:SetBackdrop({ edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 14 })
+        edge:SetBackdropBorderColor(.76, .57, .32, 1)
+        frame.keyboardEdge = edge
+    end
+    if frame.keyboardBackground then frame.keyboardBackground:SetShown(config.background) end
+    if frame.keyboardEdge then frame.keyboardEdge:SetShown(config.border) end
 end
 
 local rimPrefix = "gamepad-actionbar-squareslot-border-"

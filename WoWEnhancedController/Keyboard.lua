@@ -4,7 +4,7 @@ W.Keyboard = K
 local function spec(text, action, hint, weight) return { text = text, action = action, hint = hint, weight = weight or 1 } end
 local function label(text, weight) return { text = text, label = true, weight = weight or 1 } end
 local scopes = { "context", "chat", "global" }
--- Keep the borderless overlay and its navigation geometry in one coordinate space.
+-- Keep the overlay and its navigation geometry in one coordinate space.
 local CONTENT_WIDTH, WINDOW_GUTTER = 660, 24
 local KEY_GAP = 6
 local QUICK_X, QUICK_WIDTH = 676, 324

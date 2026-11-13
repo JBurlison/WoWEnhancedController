@@ -99,7 +99,7 @@ class AppearanceTests(unittest.TestCase):
     def test_native_settings_skin_list_reset_and_directional_order(self):
         self.run_lua('''
             W.Options.OpenAppearance();local O=W.Options;local f=O.appearanceFrame
-            assert(HOST.settingsOpened==1237 and #f.controls==6 and not W.Keyboard.frame:IsShown())
+            assert(HOST.settingsOpened==1237 and #f.controls==8 and not W.Keyboard.frame:IsShown())
             local function press(t)f:GetScript("OnGamePadButtonDown")(f,t);f:GetScript("OnGamePadButtonUp")(f,t)end
             f:GetScript("OnGamePadButtonUp")(f,"PAD1");assert(W.db.keyboardAppearance.buttons=="controller")
             for i,skin in ipairs({"controller","gold","classic","minimal"})do
@@ -109,10 +109,42 @@ class AppearanceTests(unittest.TestCase):
                 for _,sample in ipairs(f.controls[i].samples)do assert(sample.keyboardSkin==skin)end
                 press("PADDDOWN")
             end
-            assert(f.selected==5 and f.controls[5].template=="UIPanelButtonTemplate")
-            press("PADDRIGHT");assert(f.selected==6);press("PADDUP");assert(f.selected==4)
-            press("PADDDOWN");press("PAD1");assert(W.db.keyboardAppearance.buttons=="controller")
+            assert(f.selected==5 and f.controls[5].appearanceFlag=="background")
+            press("PAD1");assert(f.controls[5].checkMark:IsShown())
+            press("PADDRIGHT");assert(f.selected==6 and f.controls[6].appearanceFlag=="border")
+            press("PAD1");assert(f.controls[6].checkMark:IsShown())
+            press("PADDDOWN");assert(f.selected==8)
+            press("PADDUP");assert(f.selected==6);press("PADDUP");assert(f.selected==4)
+            press("PADDDOWN");press("PADDDOWN");assert(f.selected==7)
+            press("PAD1");assert(W.db.keyboardAppearance.buttons=="controller")
+            assert(not f.controls[5].checkMark:IsShown() and not f.controls[6].checkMark:IsShown())
             press("PADDRIGHT");press("PAD1");assert(HOST.settingsOpened==1234 and #HOST.sent==0)
+        ''')
+
+    def test_optional_shell_survives_reload_resizing_and_skin_changes(self):
+        self.run_lua('''
+            local k,options=W.Keyboard,W.Options
+            options.OpenAppearance()
+            local controls=options.appearanceFrame.controls
+            local function click(b) b:GetScript("OnClick")(b) end
+            click(controls[6])
+            local edge=k.frame.keyboardEdge
+            assert(edge and edge:IsShown() and not k.frame.keyboardBackground)
+            assert(edge:GetParent()==k.frame and edge.backdrop.edgeFile and not edge.backdrop.bgFile)
+            click(controls[5]);local fill=k.frame.keyboardBackground
+            assert(fill:IsShown() and edge:IsShown() and fill:GetParent()==k.frame)
+            assert(fill.color[4]>.7 and fill.color[4]<1)
+            click(controls[6]);assert(fill:IsShown() and not edge:IsShown())
+            W.InitDB();options.PaintAppearance()
+            assert(controls[5].checkMark:IsShown() and not controls[6].checkMark:IsShown())
+            HOST.combat=true;click(controls[6]);assert(not W.db.keyboardAppearance.border)
+            HOST.combat=false;click(controls[6]);options.SetButtonSkin("gold")
+            SettingsPanel:Hide();k:Open(HOST.Field("ChatFrame1EditBox","kept"))
+            local expanded=k.frame:GetWidth()
+            assert(k.quickVisible and fill:IsVisible() and edge:IsVisible())
+            k:ShowQuickMessages();assert(k.frame:GetWidth()<expanded)
+            assert(k.frame.keyboardEdge==edge and k.frame.keyboardBackground==fill and edge:IsVisible())
+            k:Close();assert(not fill:IsVisible() and not edge:IsVisible())
         ''')
 
     def test_settings_nintendo_confirm_ignores_keyboard_remaps_and_combat_blocks_edits(self):
