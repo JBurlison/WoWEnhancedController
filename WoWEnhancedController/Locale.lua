@@ -6,7 +6,7 @@ W.Locale = { code = aliases[locale] or locale, client = locale }
 -- saved phrases, names, macro text and stable action/context IDs never pass here.
 local aliasesForLabels = { primary="Select", back="Back", delete="Delete", shift="Shift", left="Left", right="Right",
     space="Space", symbols="Symbols", clear="Clear all", confirm="Send / Done", library="Assign mode",
-    phrases="Phrase layer", phrasesLeft="Left messages", phrasesRight="Right messages",
+    phrases="Aim quick actions", phrasesLeft="Previous quick page", phrasesRight="Next quick page",
     focus="Focus", context="This context", chat="All chat", global="All contexts", default="Default" }
 W.L = setmetatable({}, { __index = function(t, key)
     local display = aliasesForLabels[key]

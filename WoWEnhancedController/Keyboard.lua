@@ -164,18 +164,14 @@ function K:Select(row, col)
         end
         self.focused = nil; return
     end
-    self.focused = b; b.focus:Show()
-    if W.Input and #b.basePrompt == 0 then W.Theme.Prompt(b, { "primary" }, b.promptMode == "combo" and "combo" or "corner") end
+    self.focused = b; b.focus:SetShown(not b.messageSlot)
+    if W.Input and not b.messageSlot and #b.basePrompt == 0 then W.Theme.Prompt(b, { "primary" }, b.promptMode == "combo" and "combo" or "corner") end
     if self.linking then
         if b.linkIndex then self.linking.index = b.linkIndex end
         if b.linkEntry then W.Links:RowPrompt(b, true) end
         W.Links:Tooltip(self, b)
     end
-    if b.messageSlot and self.quickHint then
-        local text = W.Phrases.Resolve(self:Context(), b.messageSlot, self.quickBank)
-        self.quickHint:SetText(W.Escape(text ~= "" and text or W.L["Choose a message in Assign mode first."]))
-    elseif b.bankAction and self.quickHint then self.quickHint:SetText(W.L[b.bankAction])
-    end
+    self:PaintQuickAim()
 end
 function K:Move(dx, dy)
     if self.linking then W.Links:Move(self, dx, dy); return end
@@ -239,22 +235,18 @@ function K:AddRow(items, y, height, left, span)
                 self.pool[self.used] = button
             end
             button:ClearAllPoints(); button:SetPoint("TOPLEFT", x, -y); button:SetSize(width, height)
-            if item.tab then W.Theme.Tab(button, item.selected, true) else W.Theme.KeyboardButton(button,nil,item.selected) end
+            button.messageSlot = item.messageSlot
+            if item.messageSlot then
+                W.Theme.KeyboardButton(button, "wheel")
+            elseif item.tab then W.Theme.Tab(button, item.selected, true)
+            else W.Theme.KeyboardButton(button, nil, item.selected) end
             button:SetText(W.Escape(item.text)); button:Show()
             button.row, button.col, button.generation = #self.rows + 1, #row + 1, self.generation
             button.basePrompt = type(item.hint) == "table" and item.hint
                 or item.hint and W.Input:Icon(item.hint) and { item.hint } or {}
-            button.promptMode = item.bank and "bank" or item.combo and "combo" or item.phrase and "phrase" or (#button.basePrompt == 0 and "corner" or "inline")
+            button.promptMode = item.promptMode or (#button.basePrompt == 0 and "corner" or "inline")
             W.Theme.Prompt(button, button.basePrompt, button.promptMode)
             button.run = item.action
-            button.messageSlot = item.messageSlot
-            button.bankAction = item.bank
-            if item.bank and not button.bankHighlight then
-                button.bankHighlight = W.Theme.KeyboardRim(button, "hover")
-                button.heldHighlight = W.Theme.KeyboardRim(button, "hover", true)
-            end
-            if button.bankHighlight then button.bankHighlight:SetShown(item.bank == self.quickBank) end
-            if button.heldHighlight then button.heldHighlight:Hide() end
             button.navX, button.navY = x + width / 2, y + height / 2
             button.navGroup = (x >= QUICK_X or self.assigning and not self.composing) and "quick" or "keys"
             button:SetEnabled(not item.disabled); row[#row + 1] = button
@@ -265,8 +257,12 @@ function K:AddRow(items, y, height, left, span)
     return y + height + KEY_GAP
 end
 function K:Draw(message, skipSync)
+    if W.Input.quickHold then W.Input:EndQuickAim() end
     W.Theme.KeyboardShell(self.frame)
-    self.quickBank = self.quickBank or "phrases"
+    self.quickPage = W.Clamp(self.quickPage or 1, 1, #W.db.quickPages)
+    self.quickBank = W.db.quickPages[self.quickPage]
+    self.quickButtons = nil
+    if self.quickDecoration then self.quickDecoration:Hide() end
     self.generation = self.generation + 1
     for _, button in ipairs(self.pool) do
         button:Hide(); button.focus:Hide(); button.linkEntry, button.linkIndex = nil, nil
@@ -292,7 +288,6 @@ function K:Draw(message, skipSync)
     local y = caption and 32 or 0
     self.quickVisible = not W.Placement.editing and not self:Numeric()
     if self.view ~= "keys" and self.view ~= "tools" then self.view = "keys" end
-    if self.quickDecoration then self.quickDecoration:Hide() end
     if self.assigning then
         self.quickVisible = false
         if self.composing and self.composing.typing then
@@ -354,12 +349,9 @@ function K:SizeToRows(y)
 end
 function K:DrawKeys(y)
     local c, phrases = self:Context(), {}
-    local bindings = W.Phrases.Bindings(c, self.quickBank)
     for i = 1, self:Numeric() and 4 or 0 do
-        local slot, text = i, W.Phrases.Resolve(c, i, self.quickBank)
-        local item = spec(text, function() self:InsertPhrase(slot) end,
-            bindings[i] ~= "unbound" and { self.quickBank or "phrases", bindings[i] } or {})
-        item.phrase = true
+        local slot, text = i, W.Phrases.Resolve(c, i)
+        local item = spec(text, function() self:InsertPhrase(slot, "phrases") end)
         phrases[#phrases + 1] = item
     end
     if #phrases > 0 then y = self:AddRow(phrases, y, 54) end
@@ -449,6 +441,7 @@ function K:QuickLabel(text, x, y, width, height)
     return font
 end
 function K:ToggleAssign()
+    self.removeQuickPage = nil
     if self:Numeric() then return end
     if self.composing then self:FinishQuickMessage(false) end
     if self.assigning and not self.session then self:Close(); return end
@@ -456,32 +449,19 @@ function K:ToggleAssign()
     if self.assigning then self:Select(self.quickButtons[self.slot].row,1) end
 end
 function K:UsePhrase(slot, bank)
-    if bank and bank ~= self.quickBank and not self.composing then self:SetQuickBank(bank) end
     if self.assigning then self:BeginQuickMessage(slot)
     elseif not self.composing then self:InsertPhrase(slot, bank) end
 end
-function K:SetQuickBank(bank)
-    if self.composing or not W.Input:IsModifier(bank) then return end
-    if self.quickBank ~= bank then self.quickBank = bank; if self.frame:IsShown() then self:Draw() end end
-end
-function K:PaintQuickBank()
-    if not self.quickBankButtons then return end
-    for _, b in ipairs(self.quickBankButtons) do
-        b.bankHighlight:SetShown(b.bankAction == self.quickBank)
-        b.heldHighlight:SetShown(b.bankAction == W.Input.layer)
-    end
-end
 function K:BeginQuickMessage(slot)
+    self.removeQuickPage = nil
     if self.composing or self:Numeric() then return end
     local scope = self:Scope()
-    self.composing = { editor = self.editor, scope = scope, slot = slot, bank = self.quickBank or "phrases",
-        binding = W.Phrases.BindingsForScope(scope, self:Context(), self.quickBank)[slot] or "unbound" }
-    self.composing.bindingOriginal = self.composing.binding
+    self.composing = { editor = self.editor, scope = scope, slot = slot, bank = self.quickBank }
     local text,_,link,destination=W.Phrases.Resolve(self:Context(),slot,self.composing.bank)
     self.slot,self.composing.destination = slot,destination
     self.composing.link,self.composing.linkLabel=link,link and text
     self.editor = W.Text.New(text, { maxBytes = 1024, maxLetters = 255 })
-    self.view = "keys"; self.selectedRow,self.selectedCol=2,1; self:Draw()
+    self.view = "keys"; self.selectedRow,self.selectedCol=1,1; self:Draw()
 end
 function K:CustomMessage(typing, cancel)
     local draft = self.composing
@@ -507,14 +487,9 @@ function K:FinishQuickMessage(save)
     local draft = self.composing
     if not draft then return end
     if save then
-        local ok, err = true
-        if draft.bindingChanged then ok, err = W.Phrases.CheckBinding(draft.scope, draft.slot, draft.binding, self:Context(), draft.bank) end
-        if ok then
-            local link=self.editor.text==draft.linkLabel and draft.link or nil
-            ok, err = W.Phrases.Save(draft.scope, draft.slot, self.editor.text, draft.bank, link, draft.destination)
-        end
+        local link = self.editor.text == draft.linkLabel and draft.link or nil
+        local ok, err = W.Phrases.Save(draft.scope, draft.slot, self.editor.text, draft.bank, link, draft.destination)
         if not ok then self:Status(err); return false end
-        if draft.bindingChanged then W.Phrases.Bind(draft.scope, draft.slot, draft.binding, self:Context(), draft.bank) end
     end
     self.editor, self.composing = draft.editor, nil
     if self.input and self.input:HasFocus() then self.input:ClearFocus() end
@@ -525,23 +500,8 @@ end
 function K:CycleQuickScope()
     repeat self.scopeIndex = self.scopeIndex % #scopes + 1
     until self:Context().chat or self.scopeIndex ~= 2
-    if self.composing then
-        self.composing.scope = self:Scope()
-        self.composing.binding = W.Phrases.BindingsForScope(self:Scope(), self:Context(), self.composing.bank)[self.composing.slot] or "unbound"
-        self.composing.bindingOriginal, self.composing.bindingChanged = self.composing.binding, false
-    end
+    if self.composing then self.composing.scope = self:Scope() end
     self:Draw()
-end
-function K:CycleQuickBinding()
-    local choices, draft = { "primary", "back", "delete", "shift", "unbound" }, self.composing
-    local at = 5
-    for i, action in ipairs(choices) do if action == draft.binding then at = i end end
-    for i = 1, #choices do
-        local candidate = choices[(at + i - 1) % #choices + 1]
-        if W.Phrases.CheckBinding(draft.scope, draft.slot, candidate, self:Context(), draft.bank) then
-            draft.binding, draft.bindingChanged = candidate, candidate ~= draft.bindingOriginal; self:Draw(); return
-        end
-    end
 end
 function K:QuickContexts()
     local choices = { { key = "global", label = W.L["All text fields"], maxBytes = 1024 } }
@@ -579,14 +539,17 @@ function K:DrawQuickMessages(top)
     top = top or 0
     local x, width = self.assigning and 18 or QUICK_X, self.assigning and ASSIGN_WIDTH or QUICK_WIDTH
     local fontSize = W.db.fontSize
-    self.quickBankButtons = {}
     local headerHeight = math.max(34, fontSize * 2 + 6)
     local contextY, start = top + headerHeight + 8, top + headerHeight + 48
-    self:QuickLabel(W.L["Quick messages"], x, top + 2, width - 138, headerHeight)
-    self:AddRow({ spec(self.assigning and W.L["Done"] or W.L["Assign"], function() self:ToggleAssign() end, "library") }, top, 34, x + width - 134, 134)
+    if not self.composing then
+        self:DrawQuickHeader(x, top, width, headerHeight)
+    else
+        self:QuickLabel(W.L["Assign message"], x, top, width, headerHeight)
+    end
     local context = self:Context()
     if self.session or self.composing then
-        self:QuickLabel(context.label or context.key, x, contextY, width, 28)
+        local contextLabel = self:QuickLabel(context.label or context.key, x, contextY, width, 28)
+        if not self.composing then contextLabel:SetJustifyH("CENTER") end
     else
         self:AddRow({ spec(context.label or context.key, function()
             if self.composing then return end
@@ -596,50 +559,12 @@ function K:DrawQuickMessages(top)
         end) }, contextY, 32, x, width)
     end
     local y
-    self.quickButtons = {}
     if not self.composing then
-        local height, cell = math.max(64, fontSize * 2 + 30), (width - 12) / 3
-        local bindings = W.Phrases.Bindings(context, self.quickBank)
-        local positions = { PAD1 = { 2, 3 }, PAD2 = { 3, 2 }, PAD3 = { 1, 2 }, PAD4 = { 2, 1 } }
-        local available, used = {}, {}
-        for slot = 1, 4 do
-            local token = W.Input.keys[bindings[slot]]
-            if positions[token] and not used[token] then available[slot] = positions[token]; used[token] = true end
-        end
-        for slot = 1, 4 do
-            if not available[slot] then
-                for _, token in ipairs({ "PAD1", "PAD2", "PAD3", "PAD4" }) do
-                    if not used[token] then available[slot] = positions[token]; used[token] = true; break end
-                end
-            end
-            local index, position = slot, available[slot]
-            local text = W.Phrases.Resolve(context, slot, self.quickBank)
-            local item = spec(text ~= "" and text or W.L["Unassigned"], function() self:UsePhrase(index) end,
-                bindings[slot] ~= "unbound" and bindings[slot] or nil)
-            item.combo, item.messageSlot = true, slot
-            self:AddRow({ item }, start + (position[2] - 1) * (height + 4), height, x + (position[1] - 1) * (cell + 6), cell)
-            self.quickButtons[slot] = self.rows[#self.rows][1]
-        end
-        local banks = {}
-        for _, action in ipairs(W.Input.modifiers) do
-            local bank = action
-            local item = spec(W.Input:Icon(bank) and "" or "-", function() self:SetQuickBank(bank) end, bank)
-            item.bank = bank; banks[#banks + 1] = item
-        end
-        self:AddRow(banks, start + height + 10, 32, x + cell + 6, cell)
-        for _, b in ipairs(self.rows[#self.rows]) do
-            self.quickBankButtons[#self.quickBankButtons + 1] = b
-        end
-        self:PaintQuickBank()
-        self:QuickLabel(W.L["Hold"], x + width / 2 - 42, start + height + 44, 84, 24)
-        y = start + 3 * (height + 4)
-        self.quickHint = self:QuickLabel(self.assigning and W.L["Choose a combination to assign."] or context.chat and W.L["Hold a modifier and a button to send."] or W.L["Hold a modifier and a button to insert."], x, y + 2, width, fontSize * 2 + 4)
-        y = y + fontSize * 2 + 12
+        y = self:DrawQuickWheel(x, start, width)
     else
         local draft = self.composing
-        self:QuickLabel(W.L["Assign message"], x, start, width, 26)
         local presets = { W.L["Hello!"], W.L["Group?"], W.L["Ready!"], W.L["On my way."], W.L["Need a break."], W.L["Thank you!"] }
-        y = start + 30
+        y = start
         for i = 1, #presets, 2 do
             local items = {}
             for j = i, i + 1 do
@@ -667,14 +592,11 @@ function K:DrawQuickMessages(top)
             y = self:AddRow({spec(W.L.Format("Send to: %s", name),function() self:Action("channels") end)},y,38,x,width)
         end
         y = self:AddRow({ spec(W.L.Format("Scope: %s", W.L[scopes[self.scopeIndex]]), function() self:CycleQuickScope() end) }, y, 38, x, width)
-        y = self:AddRow({ spec(draft.binding == "unbound" and W.L["Shortcut: Unbound"] or W.L["Shortcut:"], function() self:CycleQuickBinding() end,
-            draft.binding ~= "unbound" and { draft.bank, draft.binding } or {}) }, y, 38, x, width)
         y = self:AddRow({ spec(W.L["Save"], function() self:Action("confirm") end, "confirm"),
             spec(W.L["Back"], function() self:Action("back") end, "back") }, y, 40, x, width)
         y = self:AddRow({ spec(W.L["Use inherited"], function()
             W.Phrases.Reset(draft.scope, draft.slot, draft.bank); self:FinishQuickMessage(false)
         end) }, y, 34, x, width)
-        self.quickHint = nil
     end
     return y
 end
@@ -747,13 +669,13 @@ function K:Open(box)
     self.editor = W.Text.New(source, context); self.editor:Select(cursor, cursor)
     W.NativeField.Attach(self, box)
     self.view, self.digits, self.shift, self.symbols, self.composing, self.assigning = "keys", false, false, false, nil, false
-    self.quickBank = "phrases"
     self.selectedRow, self.selectedCol = self:Numeric() and 3 or 2, 1
     self.frame:Show(); self:Draw(); self:FocusField()
     W.Input:Acquire()
     return true
 end
 function K:Close(reason)
+    self.removeQuickPage = nil
     if self.session and self.editor and self.session.context.chat then
         W.drafts[W.Contexts.DraftKey(self.session.context)] = (self.composing and self.composing.editor or self.editor).text
     end
@@ -864,7 +786,7 @@ end
 function K:DrawChannels()
     local draft = self.composing
     self.destination:SetText(draft and W.L["Assign message"] or W.L["Channels"]); self.destination:Show()
-    self.quickVisible, self.quickBankButtons, self.quickHint = false,nil,nil
+    self.quickVisible = false
     if self.quickDecoration then self.quickDecoration:Hide() end
     local items, y = {},32
     local selected = self:Context()

@@ -192,6 +192,8 @@ function T.Prompt(button, actions, mode, tokens)
         prompt:SetPoint("LEFT", 8, y)
         label:SetPoint("LEFT", count > 0 and width + 16 or 8, y)
         label:SetPoint("RIGHT", -8, y)
+    elseif mode == "wedge" then
+        label:SetPoint("TOPLEFT", 1, 0); label:SetPoint("BOTTOMRIGHT", -1, 0)
     elseif mode == "bank" then
         prompt:SetPoint("CENTER")
         label:SetPoint("CENTER"); label:SetWidth(button:GetWidth() - 4)

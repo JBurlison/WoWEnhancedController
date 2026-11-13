@@ -54,11 +54,12 @@ class KeyboardBindingTests(unittest.TestCase):
             local box=HOST.Field("Search","");W.Keyboard:Open(box)
             local b=W.KeyboardBindings;W.Input.waitNeutral=false
             local context=W.Keyboard:Context()
-            W.Phrases.Save(context.key,1,"ready", "primary", "phrases")
+            assert(W.Phrases.Save(context.key,1,"ready"))
             HOST.BindingEdge("PADLTRIGGER",true)
+            W.Input:Stick("Camera",0,1)
             HOST.BindingEdge("SHIFT-PAD1",true);HOST.BindingEdge("SHIFT-PAD1",false)
             HOST.BindingEdge("PADLTRIGGER",false)
-            assert(HOST.gameplay==0 and not W.Input.layer and not next(W.Input.held))
+            assert(HOST.gameplay==0 and not W.Input.quickHold and not next(W.Input.held) and box:GetText()=="ready")
             assert(b.owner.binds["ALT-CTRL-SHIFT-PAD1"] and b.owner.binds.PADLTRIGGER)
         ''')
 

@@ -5444,6 +5444,83 @@
       "방향 패드",
       "十字键",
       "方向鍵"
+    ],
+    "Hold to aim": [
+      "Zum Zielen halten",
+      "Maintenir pour viser",
+      "Mantén para apuntar",
+      "Tieni premuto per mirare",
+      "Segure para mirar",
+      "Удерживайте для выбора",
+      "길게 눌러 조준",
+      "按住瞄准",
+      "按住瞄準"
+    ],
+    "Release to use": [
+      "Zum Benutzen loslassen",
+      "Relâcher pour utiliser",
+      "Suelta para usar",
+      "Rilascia per usare",
+      "Solte para usar",
+      "Отпустите для выбора",
+      "놓아서 사용",
+      "松开使用",
+      "放開使用"
+    ],
+    "Aim with the right stick": [
+      "Mit dem rechten Stick zielen",
+      "Viser avec le stick droit",
+      "Apunta con el stick derecho",
+      "Mira con la levetta destra",
+      "Mire com o analógico direito",
+      "Выберите правым стиком",
+      "오른쪽 스틱으로 조준",
+      "用右摇杆选择",
+      "用右搖桿選擇"
+    ],
+    "Confirm removal": [
+      "Entfernen bestätigen",
+      "Confirmer la suppression",
+      "Confirmar eliminación",
+      "Conferma rimozione",
+      "Confirmar remoção",
+      "Подтвердить удаление",
+      "삭제 확인",
+      "确认移除",
+      "確認移除"
+    ],
+    "Aim quick actions": [
+      "Schnellaktion anvisieren",
+      "Viser une action rapide",
+      "Apuntar a una acción rápida",
+      "Seleziona un’azione rapida",
+      "Mirar em uma ação rápida",
+      "Выбор быстрого действия",
+      "빠른 동작 조준",
+      "选择快捷操作",
+      "選擇快捷動作"
+    ],
+    "Previous quick page": [
+      "Vorherige Schnellaktionsseite",
+      "Page d’actions rapides précédente",
+      "Página anterior de acciones rápidas",
+      "Pagina precedente delle azioni rapide",
+      "Página anterior de ações rápidas",
+      "Предыдущая страница быстрых действий",
+      "빠른 동작 이전 페이지",
+      "上一页快捷操作",
+      "上一頁快捷動作"
+    ],
+    "Next quick page": [
+      "Nächste Schnellaktionsseite",
+      "Page d’actions rapides suivante",
+      "Página siguiente de acciones rápidas",
+      "Pagina successiva delle azioni rapide",
+      "Próxima página de ações rápidas",
+      "Следующая страница быстрых действий",
+      "빠른 동작 다음 페이지",
+      "下一页快捷操作",
+      "下一頁快捷動作"
     ]
   }
 }

@@ -106,6 +106,7 @@ function methods:SetWordWrap(on) self.wordWrap=on end
 function methods:SetChecked(on) self.checked=on and true or false end
 function methods:GetChecked() return self.checked or false end
 function methods:SetHitRectInsets(...) self.hitInsets={...} end
+function methods:SetRotation(value) self.rotation=value end
 function methods:SetAtlas(atlas)
     assert(type(atlas)=="string" and atlas~="", "Texture:SetAtlas(): atlasName must be a nonempty string")
     self.atlas=atlas

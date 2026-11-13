@@ -6,7 +6,6 @@ I.defaults = { primary = "PAD1", back = "PAD2", delete = "PAD3", shift = "PAD4",
     confirm = "PADRTRIGGER", library = "PADFORWARD", phrases = "PADLTRIGGER",
     phrasesLeft = "PADLSHOULDER", phrasesRight = "PADRSHOULDER" }
 I.actionOrder = { "primary", "back", "delete", "shift", "left", "right", "space", "symbols", "clear", "confirm", "library", "phrases", "phrasesLeft", "phrasesRight" }
-I.modifiers = { "phrasesLeft", "phrases", "phrasesRight" }
 local styles = {
     Generic = { PAD1="P1", PAD2="P2", PAD3="P3", PAD4="P4", PADLSHOULDER="L1", PADRSHOULDER="R1", PADLTRIGGER="L2", PADRTRIGGER="R2", PADLSTICK="L3", PADRSTICK="R3", PADFORWARD=W.L["Menu"], PADBACK=W.L["View"] },
     Xbox = { PAD1="A", PAD2="B", PAD3="X", PAD4="Y", PADLSHOULDER="LB", PADRSHOULDER="RB", PADLTRIGGER="LT", PADRTRIGGER="RT", PADLSTICK="L3", PADRSTICK="R3", PADFORWARD=W.L["Menu"], PADBACK=W.L["View"] },
@@ -66,12 +65,6 @@ function I:TokenLabel(token)
     if dir then return W.L["D-pad"].." "..W.L[dir] end
     return (styles[self:Style()] or {})[token] or token
 end
-function I:PhraseHint(action, bank)
-    bank = bank or "phrases"
-    if not action or action == "unbound" then return "" end
-    if not self.keys[action] or self.keys[action] == "" or self.keys[bank] == "" then return "" end
-    return self:Hint(bank) .. "+" .. self:Hint(action)
-end
 -- Native Forever atlases from InputIconTexture.lua at the task's source pin.
 -- Tokens describe physical positions; Nintendo A-confirm changes the binding,
 -- then this lookup draws the artwork for that actual position.
@@ -102,10 +95,15 @@ function I:TokenIcon(token)
         if ok and type(atlas) == "string" then return atlas end
     end
 end
+function I:EndQuickAim()
+    self.quickHold = nil
+    if self.quickCapture then self.quickCapture:Hide() end
+    if W.Keyboard then W.Keyboard.quickAim = nil; W.Keyboard:PaintQuickAim() end
+end
 function I:ResetHeld()
-    self.held, self.layer, self.stickDirection, self.stickNext = {}, false, nil, nil
+    self.held, self.stickDirection, self.stickNext = {}, nil, nil
     self.placementAt = nil
-    if W.Keyboard then W.Keyboard:PaintQuickBank() end
+    self:EndQuickAim()
     self.waitNeutral = true
 end
 -- Capture belongs to a visible addon window, not to its close button. Keep
@@ -207,18 +205,6 @@ function I:Remap(token)
     W.db.actionBindings = W.db.actionBindings or {}; W.db.actionBindings[action] = chosen
     self:Refresh(); k:Status(W.L.Format("Assigned %s. Shoulders choose action; Focus finishes.", W.L[action]))
 end
-function I:IsModifier(action)
-    return action == "phrases" or action == "phrasesLeft" or action == "phrasesRight"
-end
-function I:UpdateLayer()
-    local bank, serial
-    for _, record in pairs(self.held) do
-        if record.modifier and (not serial or record.serial > serial) then bank, serial = record.modifier, record.serial end
-    end
-    self.layer = bank or false
-    if bank and not W.Keyboard.composing then W.Keyboard:SetQuickBank(bank) end
-    W.Keyboard:PaintQuickBank()
-end
 function I:Down(token)
     self.counters.down = self.counters.down + 1
     if W.ControlBindings.IsPad(token) then W.lastPad = true end
@@ -232,22 +218,34 @@ function I:Down(token)
     if (k.linking or k.channels) and action ~= "primary" and action ~= "back" and action ~= "focus" and not token:match("^PADD") then
         record.layer = true; return false
     end
-    if self:IsModifier(action) then
-        -- A modifier pressed midway through a Send press must cancel Send too.
-        for heldToken, heldRecord in pairs(self.held) do
-            if heldToken ~= token then heldRecord.layer = true; heldRecord.phrase = nil end
-        end
-        self.modifierSerial = (self.modifierSerial or 0) + 1
-        record.modifier, record.serial = action, self.modifierSerial
-        self:UpdateLayer(); record.generation = k.generation
+    if action == "phrasesLeft" or action == "phrasesRight" then
+        if self.quickHold then self.quickHold.cancelled = true; k.quickAim = nil; k:PaintQuickAim() end
+        record.page = action == "phrasesLeft" and -1 or 1
         return false
     end
-    if action == "focus" then return false end
-    if self.layer then
+    if action == "phrases" then
+        if k.quickButtons and not k.composing and not self.quickHold then
+            for _, pending in pairs(self.held) do
+                if pending.page then record.cancelled = true end
+                pending.layer = true
+                pending.direction = nil
+            end
+            self.stickDirection = nil
+            self.quickHold = record
+            self.quickCapture:Show()
+            if not self:SetCapture(self.quickCapture, nil, true) then
+                self:EndQuickAim(); k:Status(W.L["Controller capture unavailable in this client state."]); return false
+            end
+            record.bank = k.quickBank
+            k.quickAim = nil
+            self:SampleQuickAim()
+            k:PaintQuickAim()
+        end
+        return false
+    end
+    if self.quickHold and action ~= "focus" then
         record.layer = true
-        record.bank = self.layer
-        local bindings = W.Phrases.Bindings(k:Context(), record.bank)
-        for slot, assigned in ipairs(bindings) do if assigned == action then record.phrase = slot; break end end
+        if action == "back" then self.quickHold.cancelled = true; k.quickAim = nil; k:PaintQuickAim() end
         return false
     end
     local directions = { PADDUP={0,-1}, PADDDOWN={0,1}, PADDLEFT={-1,0}, PADDRIGHT={1,0} }
@@ -257,16 +255,25 @@ end
 function I:Up(token)
     self.counters.up = self.counters.up + 1
     local record = self.held[token]; self.held[token] = nil
-    if record and record.modifier then
-        if self.active and self:Eligible() and not self.waitNeutral then self:UpdateLayer() else self:ResetHeld() end
+    if not record then return false end
+    local k = W.Keyboard
+    local valid = self.active and self:Eligible() and not self.waitNeutral and record.session == k.session and record.generation == k.generation
+    if record == self.quickHold then
+        if valid then self:SampleQuickAim() end
+        local slot = k.quickAim
+        self:EndQuickAim()
+        if valid and not record.cancelled and slot and k.quickButtons and k.quickBank == record.bank
+            and (not k.session or W.Contexts.Valid(k.session)) then
+            k:UsePhrase(slot, record.bank)
+        end
         return false
     end
-    if not record or not self.active or not self:Eligible() or self.waitNeutral then return false end
-    local k = W.Keyboard
-    if record.session ~= k.session or record.generation ~= k.generation then return false end
-    if record.action == "focus" then W.FocusBinding()
-    elseif record.phrase then k:UsePhrase(record.phrase, record.bank)
-    elseif not record.layer and not self.layer and not record.direction and record.action then
+    if not valid then return false end
+    if record.page then
+        if self.quickHold then self.quickHold.cancelled = true end
+        k:ChangeQuickPage(record.page)
+    elseif record.action == "focus" then W.FocusBinding()
+    elseif not record.layer and not self.quickHold and not record.direction and record.action then
         local action = record.action
         if k:Numeric() and k.view == "keys" then
             if action == "delete" then action = "digits" elseif action == "shift" then action = "delete" end
@@ -275,9 +282,20 @@ function I:Up(token)
     end
     return false
 end
+function I:SampleQuickAim()
+    if not self.quickHold or self.quickHold.cancelled then return end
+    local index = W.Radial.frame and W.Radial.frame:GetAttribute("camera-index") or 2
+    local state = self:Device()
+    local stick = state and state.sticks and state.sticks[index]
+    if stick and not W.Secret(stick) then W.Keyboard:AimQuickWheel(stick.x, stick.y) end
+end
 function I:Stick(stick, x, y)
     self.counters.stick = self.counters.stick + 1
     if not self.active or not self:Eligible() then return true end
+    if self.quickHold then
+        if stick == "Camera" and not self.quickHold.cancelled then W.Keyboard:AimQuickWheel(x, y) end
+        return false
+    end
     if stick ~= "Movement" then return true end
     if self.waitNeutral then return false end
     if W.Placement.editing and W.Keyboard.positionId == "radial" then
@@ -307,6 +325,7 @@ function I:Update()
     if not self:Eligible() then self:Release(); return end
     if self.waitNeutral then if self:Neutral() then self.waitNeutral = false end; return end
     local now = GetTime()
+    if self.quickHold then self:SampleQuickAim() end
     if self.placementAt then
         if W.Placement.editing and W.Keyboard.positionId == "radial" then
             local distance = math.min(now - self.placementAt, .1) * 360
@@ -318,9 +337,8 @@ function I:Update()
         if IsKeyDown and not IsKeyDown(token:match("[^-]+$")) then
             -- Lost release can cancel a latch, never execute it.
             self.held[token] = nil
-            if record.modifier then
-                for _, pending in pairs(self.held) do if pending.bank == record.modifier then pending.phrase = nil; pending.layer = true end end
-                self:UpdateLayer()
+            if record == self.quickHold then
+                self:EndQuickAim()
             end
         elseif record.direction and now >= record.at then
             W.Keyboard:Move(unpack(record.direction)); record.at = now + 0.09
@@ -331,6 +349,13 @@ end
 function I:Init()
     self:Refresh()
     local frame = W.Keyboard.frame
+    -- The native stick receiver's propagation flag controls camera movement.
+    -- Capture axes only during aim, leaving physical typing on the native field.
+    self.quickCapture = CreateFrame("Frame", nil, frame)
+    self.quickCapture:Hide()
+    self.quickCapture:SetFrameStrata("TOOLTIP")
+    self.quickCapture:SetPropagateKeyboardInput(false)
+    self.quickCapture:SetScript("OnGamepadStick", function(_, stick, x, y) return self:Stick(stick, x, y) end)
     frame:SetScript("OnGamePadButtonDown", function(_, token) return self:Down(token) end)
     frame:SetScript("OnGamePadButtonUp", function(_, token) return self:Up(token) end)
     frame:SetScript("OnGamepadStick", function(_, stick, x, y) return self:Stick(stick, x, y) end)
