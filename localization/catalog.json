@@ -5521,6 +5521,72 @@
       "빠른 동작 다음 페이지",
       "下一页快捷操作",
       "下一頁快捷動作"
+    ],
+    "Hangul": [
+      "Hangul",
+      "Hangeul",
+      "Hangul",
+      "Hangul",
+      "Hangul",
+      "Хангыль",
+      "한글",
+      "韩文",
+      "韓文"
+    ],
+    "Pinyin": [
+      "Pinyin",
+      "Pinyin",
+      "Pinyin",
+      "Pinyin",
+      "Pinyin",
+      "Пиньинь",
+      "병음",
+      "拼音",
+      "拼音"
+    ],
+    "Zhuyin": [
+      "Zhuyin",
+      "Zhuyin",
+      "Zhuyin",
+      "Zhuyin",
+      "Zhuyin",
+      "Чжуинь",
+      "주음",
+      "注音",
+      "注音"
+    ],
+    "Latin letters": [
+      "ABC",
+      "ABC",
+      "ABC",
+      "ABC",
+      "ABC",
+      "ABC",
+      "영문",
+      "英文",
+      "英文"
+    ],
+    "Cyrillic": [
+      "Kyrillisch",
+      "Cyrillique",
+      "Cirílico",
+      "Cirillico",
+      "Cirílico",
+      "АБВ",
+      "키릴 문자",
+      "西里尔字母",
+      "西里爾字母"
+    ],
+    "No matching character": [
+      "Kein passendes Zeichen",
+      "Aucun caractère correspondant",
+      "Ningún carácter coincide",
+      "Nessun carattere corrispondente",
+      "Nenhum caractere correspondente",
+      "Нет подходящих иероглифов",
+      "일치하는 글자 없음",
+      "无匹配汉字",
+      "沒有符合的漢字"
     ]
   }
 }

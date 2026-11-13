@@ -138,6 +138,7 @@ function K:Sync()
     elseif self.session then W.NativeField.Write(self) end
 end
 function K:Insert(value)
+    self.preedit = nil
     if self.composing then self.editor:Replace(value); self:Sync()
     elseif self.session then
         local oldContext = self.session.context
@@ -257,6 +258,8 @@ function K:AddRow(items, y, height, left, span)
     return y + height + KEY_GAP
 end
 function K:Draw(message, skipSync)
+    if self.linking or self.channels or self.view ~= "keys" or W.Placement.editing
+        or (self.assigning and not (self.composing and self.composing.typing)) then self.preedit = nil end
     if W.Input.quickHold then W.Input:EndQuickAim() end
     W.Theme.KeyboardShell(self.frame)
     self.quickPage = W.Clamp(self.quickPage or 1, 1, #W.db.quickPages)
@@ -366,7 +369,7 @@ function K:DrawKeys(y)
         return y
     end
     local rows = self:Numeric() and { "789", "456", "123", "0" } or self.symbols
-        and { "1234567890", "!@#$%^&*()", "-_=+/:;?.,", "[]{}'\"\\~`" } or W.Locale.rows
+        and { "1234567890", "!@#$%^&*()", "-_=+/:;?.,", "[]{}'\"\\~`" } or self:LanguageRows()
     if self.symbols and not self:Numeric() and W.Locale.extras then rows[#rows + 1] = W.Locale.extras end
     local columns = 0
     for _, letters in ipairs(rows) do columns = math.max(columns, #W.Locale.Characters(letters)) end
@@ -374,8 +377,8 @@ function K:DrawKeys(y)
     for _, letters in ipairs(rows) do
         local keys = {}
         for _, ch in ipairs(W.Locale.Characters(letters)) do
-            local char = self.shift and W.Locale.Upper(ch) or ch
-            keys[#keys + 1] = spec(char, function() self:Insert(char); self.shift = false; self:Draw() end)
+            local char = self:KeyLabel(ch)
+            keys[#keys + 1] = spec(char, function() self:TypeLetter(char) end)
         end
         local span = #keys * keyWidth + (#keys - 1) * KEY_GAP
         y = self:AddRow(keys, y, 42, 18 + (624 - span) / 2, span)
@@ -386,10 +389,14 @@ function K:DrawKeys(y)
             spec(W.L["Clear all"], function() self:Action("clear") end, "clear"),
             spec(W.L["Undo"], function() self:Action("undo") end) }, y, 38)
     end
+    y = self:DrawCandidates(y)
     y = self:AddRow({ spec(W.L["Left"], function() self:Action("left") end, "left"),
         spec(W.L["Space"], function() self:Action("space") end, "space", 1.5),
         spec(W.L["Right"], function() self:Action("right") end, "right") }, y, 42)
     local utilities = { spec(W.L["Symbols"], function() self:Action("symbols") end, "symbols") }
+    if self:LanguageMode() then
+        utilities[#utilities + 1] = spec(W.L[self:LanguageMode()], function() self:CycleLanguage() end)
+    end
     if c.chat and not self.composing and not self.assigning then
         utilities[#utilities + 1] = spec(W.L["Link in chat"], function() W.Links:Open(self) end)
         utilities[#utilities + 1] = spec(W.L.Format("Channel: %s", c.label), function() self:Action("channels") end)
@@ -644,6 +651,7 @@ function K:ShowPosition(id)
     self.frame:Show(); self:Draw()
 end
 function K:ReleaseUI()
+    self.preedit = nil
     if W.Input then W.Input:Release() end
     if W.Links then W.Links:HideTooltip(); W.Links:HideControls() end
     self.linking, self.channels = nil, nil
@@ -660,6 +668,7 @@ end
 function K:Open(box)
     if W.Combat() or W.OtherKeyboard() then return false end
     if not W.Usable(box) then return false end
+    self.preedit = nil
     local context, source = W.Contexts.Describe(box), W.Call(box, "GetText")
     if type(source) ~= "string" then return false end
     W.Links:HideTooltip(); self.linking,self.channels,self.quickOwner = nil,nil,nil
@@ -703,6 +712,7 @@ function K:Action(action)
         if action == "back" then self:CloseChannels() end
         return
     end
+    if self:CompositionAction(action) then return end
     if action == "back" then
         if self.composing and self.composing.typing then self:CustomMessage(false,true)
         elseif self.composing then self:FinishQuickMessage(false)

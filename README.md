@@ -22,6 +22,10 @@ The keyboard opens with the game world visible between the keys. In **Settings �
 | Send chat or finish editing | RT | R2 | ZR |
 | Close and keep your edits | B | Circle | B |
 
+The keyboard follows your game language. Choose **Symbols** for accented letters or punctuation. In Korean, type consonants and vowels to build Hangul syllables. In Simplified Chinese, spell one syllable in Pinyin, then choose a character. Traditional Chinese starts in Zhuyin and also offers Pinyin. Enter the syllable without a tone. Use **‹ / ›** to browse more characters. **Space** or **Send** picks the first character on the current page. Press **Send** again when your message is ready.
+
+On Korean, Chinese, and Russian layouts, select the language button beside **Symbols** to switch to Latin letters for names or slash commands.
+
 The keyboard’s **Quick messages** wheel has eight slots per page. Use **LB / RB** to turn pages. Hold **LT**, point the **right stick** at a message, and release **LT** to send it in chat or insert it into a text field. Release **LT** with the stick centered to cancel.
 
 Choose **Assign** beside the wheel or **Quick messages** in the launcher to edit a slot, add as many pages as you need, or remove a page. For example, save “Ready for the next pull” with **Send to** set to **Party**. Sending it leaves your chat draft in place.
