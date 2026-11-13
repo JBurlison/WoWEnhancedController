@@ -2,6 +2,7 @@ local _, W = ...
 local M = { view = "launcher", selected = 1, offset = 0, rows = {}, revision = 0 }
 W.Launcher = M
 local T, L = W.Theme, W.L
+local visibleRows, rowHeight, rowSpacing = 9, 38, 5
 local iconPath = "Interface\\AddOns\\WoWEnhancedController\\Media\\Icon.tga"
 local function maskIcon(parent, texture)
     local mask = parent:CreateMaskTexture(nil, "OVERLAY")
@@ -106,11 +107,18 @@ function M:Refresh(full)
 end
 function M:Select(index)
     if #self.entries == 0 then return end
+    index = W.Clamp(index, 1, #self.entries)
     if index == self.selected then return end
-    self.selected = W.Clamp(index, 1, #self.entries)
-    if self.selected <= self.offset then self.offset = self.selected - 1 end
-    if self.selected > self.offset + 9 then self.offset = self.selected - 9 end
+    self.selected = index
     self:Draw()
+end
+function M:ScrollTo(offset, hoveredRow, fromScrollBar)
+    if self.view ~= "minimap" or not self:Eligible() then return end
+    offset = W.Clamp(math.floor(offset + .5), 0, math.max(0, #self.entries - visibleRows))
+    if offset == self.offset then return end
+    self.offset, self.held = offset, nil
+    self.selected = hoveredRow and offset + hoveredRow or W.Clamp(self.selected, offset + 1, offset + visibleRows)
+    self:Draw(fromScrollBar)
 end
 function M:Activate(mouseButton)
     local entry = self.entries[self.selected]
@@ -153,14 +161,25 @@ function M:Up(token)
     end
     return false
 end
-function M:Draw()
+function M:Draw(fromScrollBar)
     local primary, back, secondary = tokens()
     local minimap = self.view == "minimap"
     T.FocusBadge(self.focusButton, self.focusKey or false)
     for _, label in ipairs({ self.title, self.footer, self.command, self.empty }) do label:SetFontObject(T.Font("GameFontNormal")) end
-    self.offset = W.Clamp(self.offset, 0, math.max(0, #self.entries - 9))
+    local maximum = math.max(0, #self.entries - visibleRows)
+    local overflow = minimap and maximum > 0
+    self.offset = W.Clamp(self.offset, math.max(0, self.selected - visibleRows), math.min(maximum, self.selected - 1))
+    local bar = self.scrollBar
+    bar:SetShown(overflow)
+    if overflow then
+        bar:SetVisibleExtentPercentage(visibleRows / #self.entries)
+        bar:SetPanExtentPercentage(1 / maximum)
+        if not fromScrollBar then bar:SetScrollPercentage(self.offset / maximum, true) end
+    end
+    local rowWidth = overflow and 312 or 332
+    local tooltipOwner = GameTooltip and GameTooltip:GetOwner()
     local y = 110
-    for i = 1, 9 do
+    for i = 1, visibleRows do
         local b, index = self.rows[i], self.offset + i
         local entry = self.entries[index]
         b.group:Hide()
@@ -170,10 +189,11 @@ function M:Draw()
                 b.group:SetText(entry.group); b.group:ClearAllPoints(); b.group:SetPoint("TOPLEFT", self.frame, "TOPLEFT", 16, -y)
                 b.group:Show(); y = y + 24
             end
-            b.index = index; b:ClearAllPoints(); b:SetPoint("TOPLEFT", 14, -y); b:SetSize(332, 38)
+            b.index = index; b:ClearAllPoints(); b:SetPoint("TOPLEFT", 14, -y); b:SetSize(rowWidth, rowHeight)
             T.KeyboardButton(b, "controller"); b:SetText(W.Escape(entry.label))
             local label = b:GetFontString(); label:ClearAllPoints(); label:SetPoint("LEFT", minimap and 42 or 12, 0)
-            label:SetWidth(minimap and 276 or 308); label:SetJustifyH("LEFT"); label:SetWordWrap(false)
+            label:SetWidth(rowWidth - (minimap and 56 or 24)); label:SetJustifyH("LEFT"); label:SetWordWrap(false)
+            if b == tooltipOwner then GameTooltip:SetText(W.Escape(entry.label)) end
             b.art:Hide()
             if b.artMasked then b.art:RemoveMaskTexture(b.artMask); b.artMasked = nil end
             if minimap then
@@ -184,7 +204,7 @@ function M:Draw()
                 end
                 b.art:Show()
             end
-            b.focus:SetShown(index == self.selected); b:Show(); y = y + 43
+            b.focus:SetShown(index == self.selected); b:Show(); y = y + rowHeight + rowSpacing
         else b:Hide() end
     end
     self.empty:SetShown(#self.entries == 0)
@@ -212,7 +232,7 @@ function M:Draw()
     self.footerGlyph:ClearAllPoints(); self.footerGlyph:SetPoint("TOPLEFT", 16 - padding, -y - 10 + padding)
     self.footerGlyph:SetSize(20 + padding * 2, 20 + padding * 2)
     self.command:SetText((minimap and "/wec minimap" or "/wec menu")
-        .. (#self.entries > 9 and "   " .. self.selected .. " / " .. #self.entries or ""))
+        .. (overflow and "   " .. self.selected .. " / " .. #self.entries or ""))
     local footerHeight = W.db.fontSize * 2 + 8
     self.footer:SetHeight(footerHeight)
     self.command:ClearAllPoints(); self.command:SetPoint("TOPLEFT", 16, -y - footerHeight - 14)
@@ -250,8 +270,24 @@ function M:Create()
         local b = T.Button(f, L[name], function() self:SetView(view) end); b.view = view
         b:SetSize(163, 44); b:SetPoint("TOPLEFT", 14 + (i - 1) * 169, -58); self.tabs[i] = b
     end
-    for i = 1, 9 do
-        local b = T.Button(f, "", function(button) self.selected = button.index; self:Activate("LeftButton") end)
+    local function wheel(surface, delta)
+        if self.view == "minimap" and #self.entries > visibleRows then
+            self:ScrollTo(self.offset - delta, surface.rowSlot)
+        else
+            self:Select(self.selected - delta)
+        end
+    end
+    f:EnableMouseWheel(true); f:SetScript("OnMouseWheel", wheel)
+    for i = 1, visibleRows do
+        local b = T.Button(f, "", function(button)
+            local pressedEntry = button.pressedEntry
+            button.pressedEntry = nil
+            if pressedEntry and pressedEntry ~= self.entries[button.index] then return end
+            self.selected = button.index; self:Activate("LeftButton")
+        end)
+        b.rowSlot = i
+        b:EnableMouseWheel(true); b:SetScript("OnMouseWheel", wheel)
+        b:SetScript("OnMouseDown", function() b.pressedEntry = self.entries[b.index] end)
         b:SetScript("OnEnter", function()
             self:Select(b.index)
             if GameTooltip and self.entries[b.index] then
@@ -263,6 +299,15 @@ function M:Create()
         b.art = b:CreateTexture(nil, "OVERLAY"); b.art:SetSize(24, 24); b.art:SetPoint("LEFT", 10, 0)
         self.rows[i] = b
     end
+    local bar = CreateFrame("EventFrame", nil, f, "MinimalScrollBar")
+    self.scrollBar = bar
+    bar:SetPoint("TOPRIGHT", -16, -110)
+    bar:SetHeight(visibleRows * (rowHeight + rowSpacing) - rowSpacing)
+    bar:Init(1, 1)
+    bar:RegisterCallback(ScrollBarMixin.Event.OnScroll, function(_, percentage)
+        self:ScrollTo(percentage * math.max(0, #self.entries - visibleRows), nil, true)
+    end, self)
+    bar:HookScript("OnHide", function() bar:UnregisterUpdate() end)
     self.empty = T.Label(f, L["No visible minimap buttons."]); self.empty:SetPoint("TOPLEFT", 16, -108); self.empty:SetWidth(328)
     self.openButton = T.Button(f, L["Open"], function() self:Activate("LeftButton") end)
     self.rightButton = T.Button(f, L["Right-click"], function() self:Activate("RightButton") end)
@@ -282,7 +327,6 @@ function M:Create()
         if key == "ESCAPE" then self:Close() elseif key == "UP" then self:Select(self.selected - 1)
         elseif key == "DOWN" then self:Select(self.selected + 1) elseif key == "ENTER" then self:Activate("LeftButton") end
     end)
-    f:EnableMouseWheel(true); f:SetScript("OnMouseWheel", function(_, delta) self:Select(self.selected - delta) end)
     f:SetScript("OnHide", function()
         self:ReleaseControls(); self.highlight:Hide(); self.highlight:ClearAllPoints()
         if GameTooltip then GameTooltip:Hide() end

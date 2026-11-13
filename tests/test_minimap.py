@@ -72,6 +72,65 @@ class MinimapTests(unittest.TestCase):
             assert(not m:IsShown() and not m.highlight:IsShown() and W.Radial.baseBound)
         ''')
 
+    def test_wheel_and_scrollbar_browse_many_buttons_without_retargeting_a_press(self):
+        self.run_lua('''
+            for i=1,70 do HOST.MinimapButton(string.format("Addon%02d",i)) end
+            local m=W.Launcher
+            m:Open("minimap")
+            local bar,row=m.scrollBar,m.rows[4]
+            local height=m.frame:GetHeight()
+            assert(bar:IsShown() and bar.visibleExtent==9/71 and bar.panExtent==1/62)
+            row:GetScript("OnEnter")(row)
+            row:GetScript("OnMouseDown")(row,"LeftButton")
+            row:GetScript("OnMouseWheel")(row,-1)
+            assert(m.offset==1 and m.selected==5 and row.index==5 and row.focus:IsShown())
+            row:Click("LeftButton")
+            assert(not HOST.clicked and m:IsShown())
+            m:Down("PAD1")
+            bar:SetScrollPercentage(1)
+            m:Up("PAD1")
+            assert(not HOST.clicked and m.offset==62 and m.rows[9].index==71)
+            assert(m.frame:GetHeight()==height and m.selected==63)
+            m.frame:GetScript("OnKeyDown")(m.frame,"UP")
+            assert(m.selected==62 and m.offset==61 and bar.percentage==61/62)
+            m:Down("PADDUP");m:Up("PADDUP")
+            assert(m.selected==61 and m.offset==60 and bar.percentage==60/62)
+            bar:SetScrollPercentage(0)
+            m.frame:GetScript("OnMouseWheel")(m.frame,1)
+            assert(m.offset==0 and m.selected==9)
+            local target=m.entries[row.index].frame
+            row:GetScript("OnMouseDown")(row,"LeftButton")
+            HOST.now=HOST.now+1
+            row:Click("LeftButton")
+            assert(HOST.clicked[1]==target and not m:IsShown())
+        ''')
+
+    def test_refresh_and_switching_tabs_keep_the_selected_button_visible(self):
+        self.run_lua('''
+            local m=W.Launcher
+            for i=1,8 do HOST.MinimapButton(string.format("Before%02d",i)) end
+            m:Open("minimap")
+            assert(#m.entries==9 and not m.scrollBar:IsShown())
+            m:Select(9)
+            local target=m.entries[9].frame
+            for i=1,20 do HOST.MinimapButton(string.format("Ahead%02d",i)) end
+            m:Refresh(true)
+            assert(m.scrollBar:IsShown() and m.selected==29 and m.offset==20)
+            assert(m.rows[9].focus:IsShown() and m.entries[29].frame==target)
+            m:SetView("launcher")
+            assert(not m.scrollBar:IsShown() and m.offset==0)
+            m:SetView("minimap")
+            assert(m.scrollBar:IsShown() and m.scrollBar.percentage==0)
+            m.scrollBar:SetScrollPercentage(1)
+            for i=9,28 do HOST.targets[i]:Hide() end
+            m:Refresh(true)
+            assert(m.offset==0 and not m.scrollBar:IsShown() and m.rows[m.selected].focus:IsShown())
+            m.icon:Hide()
+            for i=1,8 do HOST.targets[i]:Hide() end
+            m:Refresh(true)
+            assert(m.empty:IsShown() and not m.scrollBar:IsShown() and not m.openButton:IsEnabled())
+        ''')
+
     def test_disappearing_target_rejects_held_activation_and_retains_identity(self):
         self.run_lua('''
             local a=HOST.MinimapButton("Alpha");local b=HOST.MinimapButton("Beta")
