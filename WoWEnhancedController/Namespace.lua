@@ -1,6 +1,6 @@
 local addonName, W = ...
 _G.WoWEnhancedController = W
-W.name, W.version = addonName, "1.0.0"
+W.name, W.version = addonName, "1.0.1"
 W.frames, W.adapters, W.drafts = {}, {}, {}
 
 function W.Secret(value)

@@ -12,6 +12,8 @@ Enhanced Controller adds an on-screen keyboard, quick chat messages, and a party
 
 Outside combat, select a chat or search field with your gamepad to open the keyboard. Use the D-pad to highlight a key. The on-screen prompts show your current bindings.
 
+The keyboard opens with the game world visible between the keys. In **Settings → AddOns → Enhanced Controller → Keyboard appearance**, turn on **Background** for a dark panel behind the keyboard and Quick messages, **Border** for a gold outline, or both.
+
 | Default keyboard action | Xbox | PlayStation | Nintendo |
 | --- | --- | --- | --- |
 | Select a key | A | Cross | A |
