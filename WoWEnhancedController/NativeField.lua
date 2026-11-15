@@ -76,12 +76,14 @@ function F.Attach(k, box)
     end)
     box:HookScript("OnEditFocusLost", function(field)
         local session = k.session
-        if not session or session.target ~= field or (k.composing and k.composing.typing) or k.syncing or k.submitting or k.mouseEditing then return end
+        -- Our composer may own typing for a custom quick message. A native chat
+        -- field keeps focus while composing, so its focus loss still counts.
+        if not session or session.target ~= field or k:InputOwner() ~= field or k.syncing or k.submitting or k.mouseEditing then return end
         W.Input.active = false
         -- Native Escape and mouse focus changes must finish their own focus
         -- transaction first. Do not restore a field they just dismissed.
         C_Timer.After(0, function()
-            if k.session ~= session or (k.composing and k.composing.typing) or k.mouseEditing then return end
+            if k.session ~= session or k:InputOwner() ~= field or k.mouseEditing then return end
             if W.Focus() == field then
                 if not W.Input.active then W.Input:Acquire() end
                 return

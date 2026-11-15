@@ -56,16 +56,23 @@ class RadialDraftTests(unittest.TestCase):
 
     def test_rank_checkbox_uses_localized_name_and_preserves_pinned_rank(self):
         self.run_lua('''
-            local R,D=W.Radial,W.RadialData;R:Edit();R:ChooseEditorItem({kind="spell",value="139",label="Renew",detail=""})
-            assert(not R.highestRank:GetChecked() and select(2,D.Compile(R:EditorDraft(),"player"))==139)
-            for i,b in ipairs(R.editorControls)do if b==R.highestRank then R.editorSelected=i end end
-            local f=R.editor;f:GetScript("OnGamePadButtonDown")(f,W.Input.keys.primary);f:GetScript("OnGamePadButtonUp")(f,W.Input.keys.primary)
+            local R,D=W.Radial,W.RadialData;R:Edit()
+            -- Starter actions and new spell drafts cast the highest learned rank.
             assert(R.highestRank:GetChecked() and R:EditorDraft().highestRank)
-            assert(select(2,D.Compile(R:EditorDraft(),"player"))=="Renew")
+            R:ChooseEditorItem({kind="spell",value="139",label="Renew",detail=""})
+            assert(R.highestRank:GetChecked() and select(2,D.Compile(R:EditorDraft(),"player"))=="Renew")
+            for i,b in ipairs(R.editorControls)do if b==R.highestRank then R.editorSelected=i end end
+            local f=R.editor
+            local function press()f:GetScript("OnGamePadButtonDown")(f,W.Input.keys.primary);f:GetScript("OnGamePadButtonUp")(f,W.Input.keys.primary)end
+            press();assert(not R.highestRank:GetChecked() and not R:EditorDraft().highestRank)
+            assert(select(2,D.Compile(R:EditorDraft(),"player"))==139)
+            press();assert(R.highestRank:GetChecked() and R:EditorDraft().highestRank)
             assert(R:SaveEditor());assert(D.Profile().actions[1].value=="139" and D.Profile().actions[1].highestRank)
             HOST.now=HOST.now+1;R.highestRank:GetScript("OnClick")();assert(not R:EditorDraft().highestRank)
             HOST.combat=true;R.highestRank:SetChecked(true);R.highestRank:GetScript("OnClick")();assert(not R.highestRank:GetChecked())
             HOST.combat=false;R.editorTabs[2].run();assert(not R.highestRank:IsShown() and not R:EditorDraft().highestRank)
+            R.editorTabs[1].run();assert(R.highestRank:IsShown() and R.highestRank:GetChecked() and R:EditorDraft().highestRank)
+            R:EditorCell(8);assert(R.editorIndex==#R:EditorProfile().actions+1 and R:EditorDraft().highestRank)
         ''')
 
     def test_newly_learned_rank_updates_metadata_without_changing_saved_id(self):

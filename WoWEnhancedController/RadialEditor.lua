@@ -120,7 +120,7 @@ end
 function R:EditorDraft()
     local action = self.editorDrafts[self.editorIndex]
     if not action then
-        action = copy(self:EditorProfile().actions[self.editorIndex] or {kind="spell",label="",value="",page=self.editorPage or 0,slot=self.editorSlot or 1})
+        action = copy(self:EditorProfile().actions[self.editorIndex] or {kind="spell",label="",value="",highestRank=true,page=self.editorPage or 0,slot=self.editorSlot or 1})
         self.editorDrafts[self.editorIndex] = action
     end
     return action
@@ -278,7 +278,7 @@ function R:CreateEditor(settingsCanvas)
             if kind~=mode then
                 local info=action.kind=="spell" and D.Info(action.value)
                 if action.autoLabel or action.label==action.value or (info and action.label==info.name) then action.label="" end
-                action.kind=mode;action.value="";action.macroScope=nil;action.autoLabel=nil;action.highestRank=nil
+                action.kind=mode;action.value="";action.macroScope=nil;action.autoLabel=nil;action.highestRank=mode=="spell" or nil
             end
             if mode=="custom" and action.kind~="friendly" then action.kind="custom" end
             self:LoadAction()
@@ -439,9 +439,20 @@ function R:CreateEditor(settingsCanvas)
         pickerEdge(self.pickerRows[1],"UP",-1)
         pickerEdge(self.pickerRows[#self.pickerRows],"DOWN",1)
     end
+    local function available()
+        return f:IsVisible() and not W.Blocker() and not W.Input.active and not W.IconPicker.request and not W.Combat() and not W.Placement.editing
+    end
+    -- While the picker is open the editor captures buttons only so Back closes
+    -- the picker. Forever's cursor still owns the D-pad and confirm button, so
+    -- let every other press continue to it (a capturing frame consumes input
+    -- unless it propagates).
+    local function nativePress(consume)
+        if not W.Combat() then f:SetPropagateKeyboardInput(not consume) end
+        return consume
+    end
     f:SetScript("OnGamePadButtonDown",function(_,token)
-        if nativeNavigation() and not pickerBack(token) then return true end
-        if not f:IsVisible() or W.Blocker() or W.Input.active or W.IconPicker.request or W.Combat() or W.Placement.editing then return true end
+        if nativeNavigation() and not nativePress(pickerBack(token) and available()) then return true end
+        if not available() then return true end
         W.lastPad=true;if self.editorHeld then return false end
         W.Input.padAt=GetTime()
         self.editorHeld={token=token,selected=self.editorSelected,generation=self.pickerGeneration}
@@ -452,8 +463,9 @@ function R:CreateEditor(settingsCanvas)
         return false
     end)
     f:SetScript("OnGamePadButtonUp",function(_,token)
+        if nativeNavigation() and not nativePress(self.editorHeld~=nil and self.editorHeld.token==token) then return true end
         local held=self.editorHeld;self.editorHeld=nil
-        if not f:IsVisible() or W.Blocker() or W.Input.active or W.IconPicker.request or not held or held.token~=token or W.Combat() or W.Placement.editing then return true end
+        if not available() or not held or held.token~=token then return true end
         W.Input.padAt=GetTime()
         if token==W.Input.keys.primary then
             if held.selected~=self.editorSelected or held.generation~=self.pickerGeneration then return false end
@@ -478,10 +490,19 @@ function R:OpenEditorPicker()
     if self.pickerKind=="custom" or self.pickerKind=="macro" or self.pickerKind=="friendly" then
         self.pickerKind="friendly";self.pickerSource=D.Presets()
         self.pickerSource[#self.pickerSource+1]={kind="custom",label=W.L["Write custom command..."],value="",detail="",icon=134400}
-    else self.pickerSource=self.pickerKind=="spell" and D.Spells() or D.Macros() end
+    elseif self.pickerKind=="spell" then
+        self.pickerSource=D.Spells()
+        if self:EditorDraft().highestRank then self.pickerSource=D.SpellNames(self.pickerSource) end
+    else self.pickerSource=D.Macros() end
     self.pickerOffset=0;self.editorLoading=true;self.searchInput:SetText("");self.editorLoading=false
     self:DrawPicker()
-    for i,b in ipairs(self.editorControls) do if b==self.pickerRows[1] and b:IsShown() then self.editorSelected=i;break end end
+    self:FocusEditorControl(self.pickerRows[1]:IsShown() and self.pickerRows[1] or self.pickerBack)
+end
+-- The button that opened or closed the picker is hidden now. Move Forever's
+-- Settings cursor too, or the D-pad keeps navigating from that hidden button.
+function R:FocusEditorControl(control)
+    for i,b in ipairs(self.editorControls) do if b==control then self.editorSelected=i;break end end
+    if self.editorInSettings and W.Options.NativeNavigation() then W.Options.FocusCanvasControl(control.input or control) end
     self:EditorFocus()
 end
 function R:ScrollPicker(offset)
@@ -558,8 +579,7 @@ function R:ChooseEditorItem(item)
 end
 function R:CloseEditorPicker()
     self:ClearEditorFocus();self.pickerKind=nil;self:LoadAction()
-    for i,b in ipairs(self.editorControls) do if b==self.sourceButton then self.editorSelected=i end end
-    self:EditorFocus()
+    self:FocusEditorControl(self.sourceButton)
 end
 function R:DrawEditorPreview()
     local preview=self.editorPreview

@@ -98,7 +98,7 @@ class SweepTests(unittest.TestCase):
             edge("ConfirmDpad",false);edge("KeyConfirmTrigger",false)
             assert(f:GetAttribute("sweep-button")=="ConfirmTrigger" and #HOST.actions==0)
             point(0,1);edge("ConfirmTrigger",false);edge("ConfirmTrigger",false)
-            assert(#HOST.actions==1 and HOST.actions[1].unit=="party1" and HOST.actions[1].spell==2061)
+            assert(#HOST.actions==1 and HOST.actions[1].unit=="party1" and HOST.actions[1].spell=="Flash Heal")
             assert(UnitName("target")=="Stoneguard" and f:GetAttribute("stage")=="root")
             macro("Classic");assert(f:IsShown() and f:GetAttribute("mode")=="classic" and not R.sweepSurface:IsShown())
             macro("Sweep");assert(f:IsShown() and f:GetAttribute("dual"))
@@ -127,7 +127,7 @@ class SweepTests(unittest.TestCase):
                 end
                 assert(#HOST.actions==attempt-1,"aiming must not cast")
                 edge("ConfirmTrigger",false);edge("ConfirmTrigger",false)
-                assert(#HOST.actions==attempt and HOST.actions[attempt].spell==2061)
+                assert(#HOST.actions==attempt and HOST.actions[attempt].spell=="Flash Heal")
                 assert(HOST.actions[attempt].unit=="player" and UnitName("target")=="Stoneguard")
                 assert(f:GetAttribute("stage")=="spells" and f:GetAttribute("member")==1)
             end

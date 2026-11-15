@@ -117,6 +117,20 @@ function D.Spells()
     table.sort(list, function(a, b) return a.label == b.label and tonumber(a.value) < tonumber(b.value) or a.label < b.label end)
     return list
 end
+-- A highest-rank action casts by name, so every rank of a spell is the same
+-- choice. List each name once, keeping the highest learned spell ID.
+function D.SpellNames(list)
+    local result, byName = {}, {}
+    for _, item in ipairs(list) do
+        local entry = byName[item.label]
+        if not entry then
+            entry = { kind = "spell", label = item.label, detail = "" }
+            byName[item.label] = entry; result[#result + 1] = entry
+        end
+        entry.value, entry.icon = item.value, item.icon
+    end
+    return result
+end
 function D.Macros()
     local list = {}
     if not GetNumMacros or not GetMacroInfo then return list end
@@ -167,7 +181,7 @@ function D.Profile()
         for _, id in ipairs(starters[class] or {}) do
             if IsPlayerSpell and IsPlayerSpell(id) then
                 local info = D.Info(id)
-                if info then profile.actions[#profile.actions + 1] = { kind = "spell", value = tostring(id), label = info.name, autoLabel = true } end
+                if info then profile.actions[#profile.actions + 1] = { kind = "spell", value = tostring(id), label = info.name, autoLabel = true, highestRank = true } end
             end
         end
     end

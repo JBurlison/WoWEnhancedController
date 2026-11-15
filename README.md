@@ -22,6 +22,8 @@ The keyboard opens with the game world visible between the keys. In **Settings �
 | Send chat or finish editing | RT | R2 | ZR |
 | Close and keep your edits | B | Circle | B |
 
+Sending a chat message closes the keyboard and the chat box.
+
 The keyboard follows your game language. Choose **Symbols** for accented letters or punctuation. In Korean, type consonants and vowels to build Hangul syllables. In Simplified Chinese, spell one syllable in Pinyin, then choose a character. Traditional Chinese starts in Zhuyin and also offers Pinyin. Enter the syllable without a tone. Use **‹ / ›** to browse more characters. **Space** or **Send** picks the first character on the current page. Press **Send** again when your message is ready.
 
 On Korean, Chinese, and Russian layouts, select the language button beside **Symbols** to switch to Latin letters for names or slash commands.
@@ -44,7 +46,7 @@ In a party or raid, use the default **Hold & sweep** controls:
 
 You can keep moving with the left stick while any wheel is open. The right stick aims the wheel and controls the camera again when it closes.
 
-Use the shoulder buttons to switch spell pages. If you prefer to confirm the ally and spell separately, choose **Classic** under **Healing wheel behavior** in settings. Open **Wheel spells / macros** to add learned spells or saved macros, arrange their slots, and save your layout.
+Use the shoulder buttons to switch spell pages. If you prefer to confirm the ally and spell separately, choose **Classic** under **Healing wheel behavior** in settings. Open **Wheel spells / macros** to add learned spells or saved macros, arrange their slots, and save your layout. New spells cast your highest learned rank, so the spell list shows each spell once. To pick a specific rank, clear **Highest learned rank** before you choose the spell.
 
 Choose **Target only** under **Healing wheel behavior** to use the wheel for quick targeting. Press the wheel shortcut while solo to target yourself immediately. In a party, point at a member and let the stick return to center. In a raid, choose a group first, then a member. The wheel closes as soon as you select your target.
 

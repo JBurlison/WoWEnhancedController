@@ -293,6 +293,31 @@ class AddonTests(unittest.TestCase):
             assert(other:HasFocus() and not box:HasFocus())
         ''')
 
+    def test_chat_send_closes_the_native_gamepad_chat_field_like_back(self):
+        self.run_lua('''
+            local k=W.Keyboard;local box=HOST.Field("ChatFrame1EditBox","hello")
+            box:SetAttribute("chatType","SAY");box.chatFrame=ChatFrame1
+            W.ControllerMode=function()return true end
+            -- Gamepad IM chat clears the sent text but keeps the field focused.
+            box:SetScript("OnEnterPressed",function(field)
+                HOST.sent[#HOST.sent+1]={field:GetText()};field:SetText("")
+            end)
+            -- Native Back closes chat through the frame manager, not ClearFocus.
+            local direct,native=0,0;local clear=box.ClearFocus
+            box.ClearFocus=function(...)direct=direct+1;return clear(...)end
+            function ChatFrame1:ClearGamepadFocus()native=native+1;clear(box)end
+            box:SetFocus();k:Open(box);HOST.Press("PADRTRIGGER")
+            assert(#HOST.sent==1 and native==1 and direct==0)
+            assert(not box:HasFocus() and not k.frame:IsShown() and not k.session and not W.Input.active)
+            for _,fn in ipairs(HOST.queue)do fn() end;HOST.queue={}
+            W.WatchFocus();assert(not k.frame:IsShown())
+            -- Text left to review (autocomplete or an error) keeps chat and the keyboard open.
+            box:SetScript("OnEnterPressed",function()end)
+            box:SetFocus();W.WatchFocus();assert(k.frame:IsShown())
+            k:Insert("/w Ann");HOST.Press("PADRTRIGGER")
+            assert(native==1 and direct==0 and box:HasFocus() and k.frame:IsShown() and #HOST.sent==1)
+        ''')
+
     def test_native_parser_context_updates_and_foreign_focus_are_safe(self):
         self.run_lua('''
             local k=W.Keyboard;local box=HOST.Field("ChatFrame1EditBox","");box:SetAttribute("chatType","SAY")
