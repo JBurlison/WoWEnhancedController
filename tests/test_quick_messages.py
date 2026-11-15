@@ -120,6 +120,38 @@ class QuickMessageTests(unittest.TestCase):
             assert(#HOST.sent==1 and k.lastStatus=="This chat channel is no longer joined." and box:GetText()=="keep this party draft")
         ''')
 
+    def test_chat_custom_message_keeps_native_chat_focus_and_rt_saves_to_the_wheel(self):
+        self.run_lua('''
+            local k=W.Keyboard;local box=HOST.Field("ChatFrame1EditBox","");box:SetAttribute("chatType","PARTY")
+            box.chatFrame=ChatFrame1;W.ControllerMode=function()return true end
+            local function button(label)
+                for _,row in ipairs(k.rows)do for _,b in ipairs(row)do if b:GetText()==label then return b end end end
+            end
+            box:SetFocus();k:Open(box)
+            local refocused=0;local focus=box.SetFocus
+            box.SetFocus=function(...)refocused=refocused+1;return focus(...)end
+            HOST.Press("PADFORWARD");HOST.Press("PAD1");assert(k.composing and k.composing.slot==1)
+            button("Custom message").run()
+            -- The addon never focuses native chat, so chat must keep its focus.
+            assert(k.composing.typing and box:HasFocus() and k:InputOwner()==box and W.Input.active)
+            assert(k.inputBorder:IsShown() and k.input.mouseEnabled==false)
+            k:Action("clear");k:Insert("Pull at 3|5")
+            assert(k.input:GetText()=="Pull at 3||5|cffffd100|||r")
+            k:Action("left");assert(k.input:GetText()=="Pull at 3|||cffffd100|||r5")
+            k:Action("right");HOST.Press("PADRTRIGGER")
+            assert(k.frame:IsShown() and k.composing and not k.composing.typing and box:HasFocus())
+            assert(k.lastStatus~="Chat lost focus. Open chat again to keep typing.")
+            W.WatchFocus();assert(k.frame:IsShown() and not k.suspended)
+            HOST.Press("PADRTRIGGER")
+            assert(k.frame:IsShown() and k.assigning and not k.composing and k.session and box:HasFocus())
+            assert(W.db.phrases["chat:PARTY"][1].text=="Pull at 3|5" and #HOST.sent==0 and box:GetText()=="")
+            assert(refocused==0)
+            -- Losing native chat focus mid-message still closes the session.
+            HOST.Press("PAD1");button("Custom message").run();box:ClearFocus()
+            for _,fn in ipairs(HOST.queue)do fn() end;HOST.queue={}
+            assert(not k.session and not k.frame:IsShown() and refocused==0)
+        ''')
+
     def test_composer_mouse_buttons_preserve_owned_focus_and_never_reclaim_foreign_fields(self):
         self.run_lua('''
             local k=W.Keyboard;local box=HOST.Field("ChatFrame1EditBox","kept");k:Open(box)

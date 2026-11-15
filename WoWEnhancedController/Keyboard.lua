@@ -92,20 +92,47 @@ function K:EnsureComposer()
         end
     end)
 end
+local CARET, SELECTED = "|cffffd100|||r", "|cff66ccff"
 function K:SyncComposer()
     if not self.editor or not self.input or not self.composing.typing then return end
     self.syncing = true
-    self.input:SetText(self.editor.text)
+    local e, owned = self.editor, self:ComposerOwnsInput()
+    local a, b = math.min(e.anchor, e.cursor), math.max(e.anchor, e.cursor)
+    self.input:EnableMouse(owned)
+    if owned then
+        self.input:SetMaxBytes(1024); self.input:SetMaxLetters(255)
+        self.input:SetText(e.text)
+    else
+        -- Display only: the native chat field keeps focus, so draw the caret
+        -- and selection ourselves. Escape codes must not count toward limits.
+        self.input:SetMaxBytes(0); self.input:SetMaxLetters(0)
+        local selected = b > a and SELECTED .. W.Escape(e.text:sub(a + 1, b)) .. "|r" or ""
+        local before, after = W.Escape(e.text:sub(1, a)), W.Escape(e.text:sub(b + 1))
+        self.input:SetText(e.cursor == a and before .. CARET .. selected .. after or before .. selected .. CARET .. after)
+    end
     local _, fontHeight = W.Call(self.input, "GetFont")
     self.input:SetHeight(math.max(34, (self.input:GetNumLines() or 1) * ((fontHeight or 14) + 2) + 10))
-    self.input:SetCursorPosition(self.editor.cursor)
-    if self.editor.anchor ~= self.editor.cursor then
-        self.input:HighlightText(math.min(self.editor.anchor, self.editor.cursor), math.max(self.editor.anchor, self.editor.cursor))
+    if owned then
+        self.input:SetCursorPosition(e.cursor)
+        if b > a then self.input:HighlightText(a, b) end
+    elseif self.input.wecScroll and e.cursor >= #e.text then
+        local scroll = self.input.wecScroll
+        scroll:SetVerticalScroll(math.max(0, self.input:GetHeight() - scroll:GetHeight()))
     end
     self.syncing = false
 end
+-- The field the keyboard edits: a session's native field, or the field that
+-- was focused when Quick messages opened.
+function K:NativeOwner() return self.session and self.session.target or self.quickOwner end
+-- A custom quick message is typed into our composer field. A native chat field
+-- must keep keyboard focus instead: the addon never focuses chat itself, so
+-- focus moved to the composer could not be returned to chat afterward.
+function K:ComposerOwnsInput()
+    local owner = self:NativeOwner()
+    return self.composing and self.composing.typing and not (owner and owner.chatFrame) or false
+end
 function K:InputOwner()
-    return self.composing and self.composing.typing and self.input or self.session and self.session.target or self.quickOwner
+    return self:ComposerOwnsInput() and self.input or self:NativeOwner()
 end
 function K:FocusField()
     local box = self:InputOwner()
@@ -296,7 +323,6 @@ function K:Draw(message, skipSync)
         if self.composing and self.composing.typing then
             self.inputBorder:ClearAllPoints(); self.inputBorder:SetPoint("TOPLEFT", 18, -y)
             self.inputBorder:SetSize(624, 54); self.input:SetWidth(608)
-            self.input:SetMaxBytes(1024); self.input:SetMaxLetters(255)
             y = self:DrawKeys(y + 62)
             y = self:AddRow({spec(W.L["Back"], function() self:Action("back") end, "back"),
                 spec(W.L["Delete"], function() self:Action("delete") end, "delete"),
@@ -742,7 +768,17 @@ function K:Action(action)
                 -- Gamepad/IM chat can clear text without relinquishing focus.
                 -- Let native focus-lost handling return control to the game;
                 -- never clear another field opened by a command or addon.
-                if W.Focus() == session.target and not session.target.chatFrame then W.Call(session.target, "ClearFocus") end
+                if W.Focus() == session.target then
+                    if not session.target.chatFrame then W.Call(session.target, "ClearFocus")
+                    elseif ok then
+                        -- Close the emptied chat field as native Back does. Forever
+                        -- runs the frame manager's FrameHidden securely for addon
+                        -- callers, so chat's focus-lost handler and the chat
+                        -- globals it writes stay untainted. A direct ClearFocus
+                        -- would run that handler from addon code.
+                        W.Call(session.target.chatFrame, "ClearGamepadFocus")
+                    end
+                end
                 if not ok then W.Print(err) end
             else
                 W.NativeField.Read(self, false, true); self:Draw()

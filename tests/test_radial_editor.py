@@ -41,6 +41,57 @@ class RadialEditorTests(unittest.TestCase):
             C_SpellBook=nil;assert(#D.Spells()==0)
         ''')
 
+    def test_highest_rank_picker_lists_each_spell_name_once_without_rank_text(self):
+        self.run_lua('''
+            local D=W.RadialData
+            local names=D.SpellNames({{kind="spell",label="Renew",value="139",detail="Rank 1",icon=1},
+                {kind="spell",label="Renew",value="6074",detail="Rank 2",icon=2},{kind="spell",label="Shield",value="17",detail="",icon=3}})
+            assert(#names==2 and names[1].label=="Renew" and names[1].value=="6074" and names[1].icon==2)
+            assert(names[1].detail=="" and names[2].value=="17")
+            local R=W.Radial;D.Profile().actions={};R:Edit()
+            assert(R:EditorDraft().highestRank and R.highestRank:GetChecked())
+            R:OpenEditorPicker()
+            for _,row in ipairs(R.pickerRows)do assert(not row.caption:GetText():find("\\n",1,true)) end
+            for _,item in ipairs(R.pickerSource)do assert(item.detail=="") end
+            R:CloseEditorPicker();R.highestRank.run();assert(not R:EditorDraft().highestRank)
+            R:OpenEditorPicker();local ranked
+            for _,item in ipairs(R.pickerSource)do if item.detail=="Rank 1" then ranked=item end end
+            assert(ranked and ranked.value=="139")
+        ''')
+
+    def test_native_settings_picker_moves_the_cursor_and_passes_navigation_through(self):
+        self.env.load_addon(settings_model=True);self.env.run_lua(SPELLBOOK)
+        self.run_lua('''
+            SMART_NAV_INPUT_DIRECTION={UP="UP",DOWN="DOWN",LEFT="LEFT",RIGHT="RIGHT"}
+            function SmartNavigation_AddJumpNavigationOverride(b,direction,target)b.nav=b.nav or {};b.nav[direction]=target end
+            SmartNavigation={GetCurrentButton=function(self)return self.current end,
+                GetActiveFrame=function()return SettingsPanel end,IsInFocusGroup=function()return true end,
+                SetTargetButtonForFrame=function(self,frame,target)
+                    assert(frame==SettingsPanel and target:IsVisible(),"native cursor needs a visible target")
+                    self.current=target;if target.OnSmartNavSelect then target:OnSmartNavSelect() end
+                end}
+            local R=W.Radial;R:Edit();local f=R.editor
+            assert(R.editorInSettings and not f.pad)
+            SmartNavigation.current=R.sourceButton;R.sourceButton:OnSmartNavSelect()
+            R.sourceButton.run()
+            -- The source button is hidden now; the cursor must move into the list.
+            assert(R.pickerKind=="spell" and f.pad and SmartNavigation.current==R.pickerRows[1])
+            assert(R.editorControls[R.editorSelected]==R.pickerRows[1] and R.pickerRows[1].focus:IsShown())
+            -- Capture exists for Back only; the D-pad and confirm reach the native cursor.
+            for _,token in ipairs({"PADDDOWN","PADDUP",W.Input.keys.primary})do
+                assert(f:GetScript("OnGamePadButtonDown")(f,token)==true and f.propagateKeyboard==true)
+                assert(f:GetScript("OnGamePadButtonUp")(f,token)==true and f.propagateKeyboard==true)
+                assert(R.pickerKind=="spell")
+            end
+            f:GetScript("OnGamePadButtonDown")(f,W.Input.keys.back);assert(f.propagateKeyboard==false)
+            f:GetScript("OnGamePadButtonUp")(f,W.Input.keys.back);assert(f.propagateKeyboard==false)
+            assert(not R.pickerKind and not f.pad and SmartNavigation.current==R.sourceButton)
+            assert(R.editorControls[R.editorSelected]==R.sourceButton)
+            -- Choosing a spell also returns the cursor to the visible source button.
+            R.sourceButton.run();R.pickerRows[2].run()
+            assert(not R.pickerKind and SmartNavigation.current==R.sourceButton and #HOST.actions==0)
+        ''')
+
     def test_macro_scopes_resolve_after_slot_shift_and_do_not_fall_back_to_names(self):
         self.run_lua('''
             local D=W.RadialData;local list=D.Macros();assert(#list==3)

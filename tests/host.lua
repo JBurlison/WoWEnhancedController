@@ -74,7 +74,7 @@ function SetOverrideBindingClick(frame,priority,key,name,button)
 end
 function ClearOverrideBindings(frame) assert(not HOST.combat);frame:ClearBindings() end
 function RegisterStateDriver(frame,key) frame:SetAttribute("state-"..key,"ready") end
-function methods:EnableMouse() end
+function methods:EnableMouse(on) self.mouseEnabled=on end
 function methods:EnableKeyboard(on) self.keyboardEnabled=on end
 function methods:SetPropagateKeyboardInput(on) self.propagateKeyboard=on end
 function methods:EnableMouseWheel(on) self.mouseWheelEnabled=on end
